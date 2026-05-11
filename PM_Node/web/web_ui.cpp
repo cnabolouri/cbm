@@ -1,0 +1,1126 @@
+#include "web_ui.h"
+#include "../config.h"
+
+WebUI::WebUI(SDManager& sdRef, Recorder& recorderRef, LiveData& liveRef)
+  : sd(sdRef), recorder(recorderRef), live(liveRef), server(80) {}
+
+static String badgeClass(const String& alert) {
+  if (alert == "High") return "background:#b42318;color:#fff;padding:4px 8px;border-radius:999px;";
+  if (alert == "Watch") return "background:#9a6700;color:#fff;padding:4px 8px;border-radius:999px;";
+  return "background:#238636;color:#fff;padding:4px 8px;border-radius:999px;";
+}
+
+static String htmlEscapeLocal(const String& s) {
+  String out;
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (c == '&') out += "&amp;";
+    else if (c == '<') out += "&lt;";
+    else if (c == '>') out += "&gt;";
+    else if (c == '"') out += "&quot;";
+    else out += c;
+  }
+  return out;
+}
+
+void WebUI::begin() {
+  initWiFiAP();
+  initRoutes();
+  server.begin();
+  Serial.println("Web server started");
+}
+
+void WebUI::handleClient() {
+  server.handleClient();
+}
+
+void WebUI::setRecordingCallbacks(std::function<bool()> startCb, std::function<void()> stopCb) {
+  startRecordingCb = startCb;
+  stopRecordingCb = stopCb;
+}
+
+void WebUI::setStatusMessageSource(String* statusMsg) {
+  statusMessagePtr = statusMsg;
+}
+
+void WebUI::setVibrationFFTaxisRef(VibrationAxis* axisPtr) {
+  vibrationFFTaxisPtr = axisPtr;
+}
+
+void WebUI::setManualOverrideRef(bool* overridePtrIn) {
+  manualOverridePtr = overridePtrIn;
+}
+
+void WebUI::initWiFiAP() {
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID, AP_PASS);
+
+  IPAddress ip = WiFi.softAPIP();
+  Serial.print("AP IP: ");
+  Serial.println(ip);
+}
+
+String WebUI::htmlHeader(const String& title) {
+  String s;
+  s += "<!DOCTYPE html><html><head><meta charset='utf-8'>";
+  s += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
+  s += "<title>" + title + "</title>";
+  s += "<style>";
+  s += "body{font-family:Arial;background:#111;color:#eee;margin:0;padding:16px;}";
+  s += "h1,h2{margin:8px 0 12px 0;}";
+  s += ".nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}";
+  s += ".nav a,.btn{background:#1f6feb;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;border:none;display:inline-block;}";
+  s += ".card{background:#1b1b1b;border:1px solid #333;border-radius:12px;padding:14px;margin-bottom:14px;}";
+  s += ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;}";
+  s += ".metric{background:#161616;border:1px solid #333;border-radius:10px;padding:12px;}";
+  s += "table{width:100%;border-collapse:collapse;}";
+  s += "th,td{border-bottom:1px solid #333;padding:8px;text-align:left;}";
+  s += "canvas{width:100%;height:auto;background:#0d0d0d;border:1px solid #333;border-radius:10px;display:block;}";
+  s += ".legend{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;margin:8px 0 0 0;}";
+  s += ".dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}";
+  s += ".muted{color:#aaa;font-size:14px;}";
+  s += "</style></head><body>";
+  s += "<div class='nav'>";
+  s += "<a href='/overview'>Overview</a>";
+  s += "<a href='/live/vibration'>Vibration</a>";
+  s += "<a href='/live/vibration_fft'>Vibration FFT</a>";
+  s += "<a href='/live/temperature'>Temperature</a>";
+  s += "<a href='/live/sound'>Sound</a>";
+  s += "<a href='/live/sound_fft'>Sound FFT</a>";
+  s += "<a href='/files'>Sessions</a>";
+  s += "</div>";
+  return s;
+}
+
+String WebUI::htmlFooter() {
+  return "</body></html>";
+}
+
+void WebUI::initRoutes() {
+  server.on("/", HTTP_GET, [this]() { handleRoot(); });
+  server.on("/overview", HTTP_GET, [this]() { handleOverviewPage(); });
+  server.on("/live", HTTP_GET, [this]() { handleLivePage(); });
+  server.on("/live/vibration", HTTP_GET, [this]() { handleLiveVibrationPage(); });
+  server.on("/live/vibration_fft", HTTP_GET, [this]() { handleLiveVibrationFFTPage(); });
+  server.on("/live/temperature", HTTP_GET, [this]() { handleLiveTemperaturePage(); });
+  server.on("/live/sound", HTTP_GET, [this]() { handleLiveSoundPage(); });
+  server.on("/live/sound_fft", HTTP_GET, [this]() { handleLiveSoundFFTPage(); });
+  server.on("/sessions", HTTP_GET, [this]() { handleSessions(); });
+  server.on("/files", HTTP_GET, [this]() { handleFiles(); });
+  server.on("/download", HTTP_GET, [this]() { handleDownload(); });
+  server.on("/delete", HTTP_GET, [this]() { handleDelete(); });
+  server.on("/delete_session", HTTP_GET, [this]() { handleDeleteSession(); });
+  server.on("/edit_session", HTTP_GET, [this]() { handleEditSessionPage(); });
+  server.on("/save_session_meta", HTTP_POST, [this]() { handleSaveSessionMeta(); });
+  server.on("/compare", HTTP_GET, [this]() { handleComparePage(); });
+  server.on("/record/start", HTTP_GET, [this]() { handleRecordStart(); });
+  server.on("/record/stop", HTTP_GET, [this]() { handleRecordStop(); });
+  server.on("/set_vibration_fft_axis", HTTP_GET, [this]() { handleSetVibrationFFTaxis(); });
+  server.on("/set_manual_override", HTTP_GET, [this]() { handleSetManualOverride(); });
+  server.on("/api/status", HTTP_GET, [this]() { handleStatusJson(); });
+  server.on("/api/live", HTTP_GET, [this]() { handleLiveJson(); });
+  server.on("/api/analysis", HTTP_GET, [this]() { handleAnalysisJson(); });
+  server.on("/api/sound_fft", HTTP_GET, [this]() { handleSoundSpectrumJson(); });
+  server.on("/api/vibration_fft", HTTP_GET, [this]() { handleVibrationSpectrumJson(); });
+  server.on("/view", HTTP_GET, [this]() { handleViewPage(); });
+  server.on("/api/file", HTTP_GET, [this]() { handleFileRaw(); });
+}
+
+void WebUI::handleRoot() {
+  handleOverviewPage();
+}
+
+void WebUI::handleOverviewPage() {
+  String s = htmlHeader("Overview");
+  s += "<h1>Overview</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>System</b><br>SD: <span id='ov_sd'>-</span><br>Recording: <span id='ov_rec'>-</span></div>";
+
+  s += "<div class='metric'><b>Mount</b><br>";
+  s += "State: <span id='ov_mount_state'>-</span><br>";
+  s += "Confidence: <span id='ov_mount_conf'>-</span><br>";
+  s += "Trusted: <span id='ov_mount_trust'>-</span></div>";
+
+  s += "<div class='metric'><b>Recording State</b><br>";
+  s += "Mode: <span id='ov_rec_mode'>-</span><br>";
+  s += "Override: <span id='ov_override'>-</span><br>";
+  s += "Status: <span id='ov_status'>-</span></div>";
+
+  s += "<div class='metric'><b>Vibration</b><br>";
+  s += "Current: <span id='ov_vcur'>-</span><br>";
+  s += "Max: <span id='ov_vmax'>-</span><br>";
+  s += "Axis: <span id='ov_vaxis'>-</span><br>";
+  s += "Alert: <span id='ov_valert'>-</span></div>";
+
+  s += "<div class='metric'><b>Temperature</b><br>";
+  s += "Delta: <span id='ov_tcur'>-</span><br>";
+  s += "Max: <span id='ov_tmax'>-</span><br>";
+  s += "Rise: <span id='ov_trise'>-</span><br>";
+  s += "Alert: <span id='ov_talert'>-</span></div>";
+
+  s += "<div class='metric'><b>Sound</b><br>";
+  s += "dB: <span id='ov_scur'>-</span><br>";
+  s += "Max: <span id='ov_smax'>-</span><br>";
+  s += "Hz: <span id='ov_shz'>-</span><br>";
+  s += "Alert: <span id='ov_salert'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Quick Health View</h2>";
+  s += "<div class='grid'>";
+  s += "<div class='metric'><b>Overall</b><br><span id='ov_overall'>-</span></div>";
+  s += "<div class='metric'><b>Interpretation</b><br><span id='ov_text'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Mini Trends</h2>";
+  s += "<div style='display:grid;grid-template-columns:1fr;gap:16px;'>";
+  s += "<div><div class='muted'>Total Vibration</div><canvas id='ov_vib' width='900' height='120'></canvas></div>";
+  s += "<div><div class='muted'>Delta Temperature</div><canvas id='ov_temp' width='900' height='120'></canvas></div>";
+  s += "<div><div class='muted'>Sound dB</div><canvas id='ov_sound' width='900' height='120'></canvas></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Quick Actions</h2>";
+  s += "<a class='btn' href='/record/start'>Start / Arm Recording</a> ";
+  s += "<a class='btn' href='/record/stop'>Stop Recording</a> ";
+  s += "<a class='btn' href='/live/vibration'>Vibration</a> ";
+  s += "<a class='btn' href='/live/temperature'>Temperature</a> ";
+  s += "<a class='btn' href='/live/sound'>Sound</a>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Mount / Recording Control</h2>";
+  s += "<a class='btn' href='/record/start'>Start / Arm Recording</a> ";
+  s += "<a class='btn' href='/record/stop'>Stop</a> ";
+  s += "<a class='btn' href='/set_manual_override?enabled=1'>Override ON</a> ";
+  s += "<a class='btn' href='/set_manual_override?enabled=0'>Override OFF</a>";
+  s += "</div>";
+
+  if (statusMessagePtr && statusMessagePtr->length()) {
+    s += "<div class='card'><b>Status</b><br>" + *statusMessagePtr + "</div>";
+  }
+
+  s += "<div class='card'><h2>Current File</h2>";
+  s += (live.system.currentBaseName.length() ? live.system.currentBaseName : String("None"));
+  s += "</div>";
+
+  s += "<script>";
+  s += "const MAX_POINTS=100;const ovV=[],ovT=[],ovS=[];";
+  s += "function push(a,v){a.push(v);if(a.length>MAX_POINTS)a.shift();}";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function rangeOf(series,opts={}){let all=[];series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v))));if(!all.length)return{min:0,max:1};let min=Math.min(...all),max=Math.max(...all);if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor);if(opts.zeroMin)min=0;if(max===min)max=min+1;const span=max-min,pad=span*(opts.paddingFrac||0.12);min-=opts.zeroMin?0:pad;max+=pad;if(opts.zeroMin&&min<0)min=0;return{min,max};}";
+  s += "function drawSpark(canvasId,arr,color,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<3;i++){let y=h*i/3;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}const rg=rangeOf([arr],opts);function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;}if(arr.length>1){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<arr.length;i++){let x=(i/(arr.length-1))*w;let y=py(arr[i]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}ctx.fillStyle='#aaa';ctx.font='11px Arial';ctx.fillText('min:'+rg.min.toFixed(3),8,h-6);ctx.fillText('max:'+rg.max.toFixed(3),8,12);}";
+  s += "function mountStateName(v){if(v===3)return'MONITORING';if(v===2)return'STABILIZING';if(v===1)return'MOVING';return'UNKNOWN';}";
+  s += "function recModeName(v){if(v===2)return'ACTIVE';if(v===1)return'ARMED';return'IDLE';}";
+  s += "function overallAlert(v,t,s){if(v==='High'||t==='High'||s==='High')return'High';if(v==='Watch'||t==='Watch'||s==='Watch')return'Watch';return'Normal';}";
+  s += "function interpretation(v,t,s,axis,rising){let parts=[];if(v==='High')parts.push('Mechanical vibration is elevated, strongest on '+axis+'.');else if(v==='Watch')parts.push('Vibration is above normal watch level.');else parts.push('Vibration looks stable.');if(t==='High')parts.push('Thermal delta is significantly elevated.');else if(t==='Watch')parts.push('Temperature delta is above normal watch level.');else parts.push('Temperature looks stable.');if(rising)parts.push('Temperature is rising faster than recent average.');if(s==='High')parts.push('Sound level is high and may indicate roughness or abnormal load.');else if(s==='Watch')parts.push('Sound level is above normal watch level.');else parts.push('Sound trend looks normal.');return parts.join(' ');}";
+  s += "async function poll(){const r=await fetch('/api/analysis');const d=await r.json();setText('ov_sd',d.sd?'OK':'FAIL');setText('ov_rec',d.recording?'ON':'OFF');setText('ov_mount_state',mountStateName(d.mount.state));setText('ov_mount_conf',d.mount.confidence.toFixed(1)+'%');setText('ov_mount_trust',d.mount.trusted?'Yes':'No');setText('ov_rec_mode',recModeName(d.recordingMode));setText('ov_override',d.manualOverride?'ON':'OFF');setText('ov_status',d.statusText||'-');setText('ov_vcur',d.vtot.toFixed(5)+' in/s');setText('ov_vmax',d.vibration.maxTotal.toFixed(5));setText('ov_vaxis',d.vibration.dominantAxis);setText('ov_valert',d.vibration.alert);setText('ov_tcur',d.dTF.toFixed(2)+' F');setText('ov_tmax',d.temperature.maxDelta.toFixed(2));setText('ov_trise',d.temperature.risingFast?'Yes':'No');setText('ov_talert',d.temperature.alert);setText('ov_scur',d.db.toFixed(2));setText('ov_smax',d.sound.maxDb.toFixed(2));setText('ov_shz',d.hz.toFixed(1));setText('ov_salert',d.sound.alert);const overall=overallAlert(d.vibration.alert,d.temperature.alert,d.sound.alert);setText('ov_overall',d.mount.trusted||d.manualOverride?overall:'Waiting');if(!d.mount.trusted&&!d.manualOverride)setText('ov_text','Device is not yet stably mounted. Diagnostic interpretation is paused until stable contact is confirmed.');else setText('ov_text',interpretation(d.vibration.alert,d.temperature.alert,d.sound.alert,d.vibration.dominantAxis,d.temperature.risingFast));push(ovV,d.vtot);push(ovT,d.dTF);push(ovS,d.db);drawSpark('ov_vib',ovV,'#ffd54a',{zeroMin:true,absoluteFloor:0.002,paddingFrac:0.15});drawSpark('ov_temp',ovT,'#ff4d9d',{zeroMin:true,absoluteFloor:1,paddingFrac:0.15});drawSpark('ov_sound',ovS,'#3ddc84',{zeroMin:true,absoluteFloor:10,paddingFrac:0.15});}";
+  s += "setInterval(poll,500);poll();";
+  s += "</script>";
+
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLivePage() {
+  String s = htmlHeader("Live Charts");
+
+  s += "<h1>Live Charts</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>SD</b><br><span id='sdStatus'>-</span></div>";
+  s += "<div class='metric'><b>Recording</b><br><span id='recStatus'>-</span></div>";
+  s += "<div class='metric'><b>Total Vib</b><br><span id='vtot'>-</span></div>";
+  s += "<div class='metric'><b>Object Temp</b><br><span id='objF'>-</span></div>";
+  s += "<div class='metric'><b>Sound dB</b><br><span id='db'>-</span></div>";
+  s += "<div class='metric'><b>Frequency</b><br><span id='hz'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Vibration</h2>";
+  s += "<canvas id='vibChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#ff4d4d'></span>X</span>";
+  s += "<span><span class='dot' style='background:#3ddc84'></span>Y</span>";
+  s += "<span><span class='dot' style='background:#4da3ff'></span>Z</span>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>TOT</span>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Temperature</h2>";
+  s += "<canvas id='tempChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>Object</span>";
+  s += "<span><span class='dot' style='background:#4da3ff'></span>Reference</span>";
+  s += "<span><span class='dot' style='background:#ff8c42'></span>Ambient</span>";
+  s += "<span><span class='dot' style='background:#ff4d9d'></span>Delta</span>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Sound</h2>";
+  s += "<canvas id='soundChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#3ddc84'></span>dB</span>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>Hz/100</span>";
+  s += "</div></div>";
+
+  s += "<script>";
+  s += "const MAX_POINTS=120;";
+  s += "const vib={x:[],y:[],z:[],t:[]};";
+  s += "const temp={obj:[],ref:[],amb:[],dt:[]};";
+  s += "const sound={db:[],hzScaled:[]};";
+  s += "function push(arr,val){arr.push(val); if(arr.length>MAX_POINTS) arr.shift();}";
+  s += "function setText(id,val){document.getElementById(id).textContent=val;}";
+  s += "function drawChart(canvasId, series, colors, options={}){";
+  s += "const c=document.getElementById(canvasId),ctx=c.getContext('2d');";
+  s += "const w=c.width,h=c.height;";
+  s += "ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,w,h);";
+  s += "ctx.strokeStyle='#2d2d2d'; ctx.lineWidth=1;";
+  s += "for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}";
+  s += "for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}";
+  s += "let all=[]; series.forEach(a=>all=all.concat(a));";
+  s += "let max=Math.max(...all, options.minMax||0.001), min=0;";
+  s += "if(options.allowNegative){min=Math.min(...all,-0.001); max=Math.max(...all,0.001);} if(max===min)max=min+1;";
+  s += "function py(v){return h-((v-min)/(max-min))*h;}";
+  s += "series.forEach((arr,i)=>{ if(arr.length<2)return; ctx.strokeStyle=colors[i]; ctx.lineWidth=2; ctx.beginPath(); for(let k=0;k<arr.length;k++){ let x=(k/(MAX_POINTS-1))*w; let y=py(arr[k]); if(k===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke(); });";
+  s += "ctx.fillStyle='#aaa'; ctx.font='12px Arial'; ctx.fillText('min:'+min.toFixed(3),8,h-8); ctx.fillText('max:'+max.toFixed(3),8,14);";
+  s += "}";
+  s += "async function poll(){ try{ const r=await fetch('/api/live'); const d=await r.json();";
+  s += "setText('sdStatus', d.sd ? 'OK':'FAIL');";
+  s += "setText('recStatus', d.recording ? 'ON':'OFF');";
+  s += "setText('vtot', d.vtot.toFixed(5)+' in/s');";
+  s += "setText('objF', d.objF.toFixed(1)+' F');";
+  s += "setText('db', d.db.toFixed(1));";
+  s += "setText('hz', d.hz.toFixed(0));";
+  s += "push(vib.x,d.vx); push(vib.y,d.vy); push(vib.z,d.vz); push(vib.t,d.vtot);";
+  s += "push(temp.obj,d.objF); push(temp.ref,d.refF); push(temp.amb,d.ambF); push(temp.dt,d.dTF);";
+  s += "push(sound.db,d.db); push(sound.hzScaled,d.hz/100.0);";
+  s += "drawChart('vibChart',[vib.x,vib.y,vib.z,vib.t],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],{minMax:0.001});";
+  s += "drawChart('tempChart',[temp.obj,temp.ref,temp.amb,temp.dt],['#ffd54a','#4da3ff','#ff8c42','#ff4d9d'],{minMax:1});";
+  s += "drawChart('soundChart',[sound.db,sound.hzScaled],['#3ddc84','#ffd54a'],{minMax:1});";
+  s += "}catch(e){console.log(e);} }";
+  s += "setInterval(poll,400); poll();";
+  s += "</script>";
+
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveVibrationPage() {
+  String s = htmlHeader("Live Vibration");
+  s += "<h1>Live Vibration</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>X</b><br><span id='vx'>-</span></div>";
+  s += "<div class='metric'><b>Y</b><br><span id='vy'>-</span></div>";
+  s += "<div class='metric'><b>Z</b><br><span id='vz'>-</span></div>";
+  s += "<div class='metric'><b>Total</b><br><span id='vtot'>-</span></div>";
+  s += "<div class='metric'><b>Max Total</b><br><span id='vmax'>-</span></div>";
+  s += "<div class='metric'><b>Average</b><br><span id='vavg'>-</span></div>";
+  s += "<div class='metric'><b>Dominant Axis</b><br><span id='vaxis'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>XYZ + Total Trend</h2><canvas id='vibChart' width='900' height='260'></canvas></div>";
+  s += "<div class='card'><h2>Total Trend + Moving Average</h2><canvas id='vibTotalChart' width='900' height='220'></canvas></div>";
+  s += "<div class='card'><h2>Axis Magnitudes</h2><canvas id='vibBars' width='900' height='220'></canvas></div>";
+
+  s += "<script>";
+  s += "const MAX_POINTS=140; const vx=[],vy=[],vz=[],vt=[];";
+  s += "function push(a,v){a.push(v); if(a.length>MAX_POINTS) a.shift();}";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function movingAverage(arr,win=8){const out=[]; for(let i=0;i<arr.length;i++){let s=0,n=0; for(let j=Math.max(0,i-win+1);j<=i;j++){s+=arr[j];n++;} out.push(n?s/n:0);} return out;}";
+  s += "function rangeOf(series,opts={}){let all=[]; series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v)))); if(!all.length)return{min:0,max:1}; let min=Math.min(...all),max=Math.max(...all); if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor); if(opts.zeroMin)min=0; if(opts.centerZero){const m=Math.max(Math.abs(min),Math.abs(max),opts.absoluteFloor||0.001);min=-m;max=m;} if(max===min)max=min+1; const span=max-min,pad=span*(opts.paddingFrac||0.12); min-=opts.zeroMin?0:pad; max+=pad; if(opts.zeroMin&&min<0)min=0; return{min,max};}";
+  s += "function drawAdvancedChart(canvasId,series,colors,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d'); const w=c.width,h=c.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,w,h); ctx.strokeStyle='#2d2d2d'; ctx.lineWidth=1; for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();} for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();} const rg=rangeOf(series,opts); function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;} if(rg.min<0&&rg.max>0){let zy=py(0);ctx.strokeStyle='#555';ctx.beginPath();ctx.moveTo(0,zy);ctx.lineTo(w,zy);ctx.stroke();} series.forEach((arr,i)=>{if(!arr||arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}); ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+rg.min.toFixed(4),8,h-8);ctx.fillText('max:'+rg.max.toFixed(4),8,14);}";
+  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d'); const w=c.width,h=c.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,w,h); const maxVal=Math.max(...values,maxFloor); const barW=Math.floor(w/values.length)-20; values.forEach((v,i)=>{const x=20+i*Math.floor(w/values.length); const bh=(v/maxVal)*(h-50); const y=h-bh-25; ctx.fillStyle=colors[i]; ctx.fillRect(x,y,barW,bh); ctx.fillStyle='#ddd'; ctx.font='12px Arial'; ctx.fillText(labels[i],x,h-8); ctx.fillText(v.toFixed(4),x,y-6);});}";
+  s += "async function poll(){const r=await fetch('/api/analysis'); const d=await r.json(); setText('vx',d.vx.toFixed(5)); setText('vy',d.vy.toFixed(5)); setText('vz',d.vz.toFixed(5)); setText('vtot',d.vtot.toFixed(5)); setText('vmax',d.vibration.maxTotal.toFixed(5)); setText('vavg',d.vibration.avgTotal.toFixed(5)); setText('vaxis',d.vibration.dominantAxis); push(vx,d.vx); push(vy,d.vy); push(vz,d.vz); push(vt,d.vtot); drawAdvancedChart('vibChart',[vx,vy,vz,vt],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],{centerZero:true,absoluteFloor:0.002,paddingFrac:0.15}); drawAdvancedChart('vibTotalChart',[vt,movingAverage(vt,10)],['#ffd54a','#ffffff'],{zeroMin:true,absoluteFloor:0.002,paddingFrac:0.15}); drawBars('vibBars',['|X|','|Y|','|Z|','TOT'],[Math.abs(d.vx),Math.abs(d.vy),Math.abs(d.vz),Math.abs(d.vtot)],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],0.01);}";
+  s += "setInterval(poll,400); poll();";
+  s += "</script>";
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveVibrationFFTPage() {
+  String s = htmlHeader("Live Vibration FFT");
+  s += "<h1>Live Vibration FFT</h1>";
+
+  s += "<div class='card'><h2>Axis Selection</h2>";
+  s += "<div style='display:flex;gap:8px;flex-wrap:wrap;'>";
+  s += "<a class='btn' href='/set_vibration_fft_axis?axis=X'>Axis X</a>";
+  s += "<a class='btn' href='/set_vibration_fft_axis?axis=Y'>Axis Y</a>";
+  s += "<a class='btn' href='/set_vibration_fft_axis?axis=Z'>Axis Z</a>";
+  s += "<a class='btn' href='/set_vibration_fft_axis?axis=MAG'>Magnitude</a>";
+  s += "</div></div>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>Dominant Hz</b><br><span id='vfft_dom_hz'>-</span></div>";
+  s += "<div class='metric'><b>Dominant Mag</b><br><span id='vfft_dom_mag'>-</span></div>";
+  s += "<div class='metric'><b>Source Axis</b><br><span id='vfft_axis'>-</span></div>";
+  s += "<div class='metric'><b>Character</b><br><span id='vfft_character'>-</span></div>";
+  s += "<div class='metric'><b>H2</b><br><span id='vfft_h2'>-</span></div>";
+  s += "<div class='metric'><b>H3</b><br><span id='vfft_h3'>-</span></div>";
+  s += "<div class='metric'><b>Low/Mid/High</b><br><span id='vfft_bands'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Top Peaks</h2><div class='grid'>";
+  s += "<div class='metric'><b>Peak 1</b><br><span id='vp1'>-</span></div>";
+  s += "<div class='metric'><b>Peak 2</b><br><span id='vp2'>-</span></div>";
+  s += "<div class='metric'><b>Peak 3</b><br><span id='vp3'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Vibration Spectrum</h2><canvas id='vfftChart' width='900' height='280'></canvas></div>";
+  s += "<div class='card'><h2>Band Balance</h2><canvas id='vfftBands' width='900' height='220'></canvas></div>";
+
+  s += "<script>";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function drawSpectrum(canvasId,hz,mag,peaks){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}if(!mag.length)return;const maxMag=Math.max(...mag,0.001);const maxHz=Math.max(...hz,1);for(let i=0;i<mag.length;i++){const x=(hz[i]/maxHz)*w;const bh=(mag[i]/maxMag)*(h-20);ctx.fillStyle='#4da3ff';ctx.fillRect(x,h-bh,Math.max(2,w/mag.length-2),bh);}ctx.strokeStyle='#ff4d4d';ctx.fillStyle='#ff4d4d';ctx.font='12px Arial';peaks.forEach((p,i)=>{if(!p||!p.hz)return;const x=(p.hz/maxHz)*w;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();ctx.fillText('P'+(i+1)+': '+p.hz.toFixed(1)+'Hz',Math.min(x+4,w-120),16+i*14);});ctx.fillStyle='#aaa';ctx.fillText('0 Hz',8,h-8);ctx.fillText(maxHz.toFixed(1)+' Hz',w-80,h-8);ctx.fillText('max mag: '+maxMag.toFixed(4),8,14);}";
+  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);const maxVal=Math.max(...values,maxFloor);const barW=Math.floor(w/values.length)-30;values.forEach((v,i)=>{const x=25+i*Math.floor(w/values.length);const bh=(v/maxVal)*(h-50);const y=h-bh-25;ctx.fillStyle=colors[i];ctx.fillRect(x,y,barW,bh);ctx.fillStyle='#ddd';ctx.font='12px Arial';ctx.fillText(labels[i],x,h-8);ctx.fillText(v.toFixed(4),x,y-6);});}";
+  s += "async function poll(){const r=await fetch('/api/vibration_fft');const d=await r.json();setText('vfft_dom_hz',d.dominantHz.toFixed(2));setText('vfft_dom_mag',d.dominantMag.toFixed(4));setText('vfft_axis',d.sourceAxis);setText('vfft_character',d.character);setText('vfft_h2',d.harmonic2?'Yes':'No');setText('vfft_h3',d.harmonic3?'Yes':'No');setText('vfft_bands',d.lowBand.toFixed(3)+' / '+d.midBand.toFixed(3)+' / '+d.highBand.toFixed(3));setText('vp1',d.peaks[0].hz.toFixed(2)+' Hz | '+d.peaks[0].mag.toFixed(4));setText('vp2',d.peaks[1].hz.toFixed(2)+' Hz | '+d.peaks[1].mag.toFixed(4));setText('vp3',d.peaks[2].hz.toFixed(2)+' Hz | '+d.peaks[2].mag.toFixed(4));drawSpectrum('vfftChart',d.hz,d.mag,d.peaks);drawBars('vfftBands',['Low','Mid','High'],[d.lowBand,d.midBand,d.highBand],['#4da3ff','#3ddc84','#ff4d4d'],0.001);}";
+  s += "setInterval(poll,500);poll();";
+  s += "</script>";
+
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveTemperaturePage() {
+  String s = htmlHeader("Live Temperature");
+  s += "<h1>Live Temperature</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>Object</b><br><span id='objF'>-</span></div>";
+  s += "<div class='metric'><b>Reference</b><br><span id='refF'>-</span></div>";
+  s += "<div class='metric'><b>Ambient</b><br><span id='ambF'>-</span></div>";
+  s += "<div class='metric'><b>Delta</b><br><span id='dTF'>-</span></div>";
+  s += "<div class='metric'><b>Max Delta</b><br><span id='dmax'>-</span></div>";
+  s += "<div class='metric'><b>Average Delta</b><br><span id='davg'>-</span></div>";
+  s += "<div class='metric'><b>Rising Fast</b><br><span id='rise'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Temperature Trend</h2><canvas id='tempChart' width='900' height='260'></canvas></div>";
+  s += "<div class='card'><h2>Delta Trend</h2><canvas id='deltaChart' width='900' height='220'></canvas></div>";
+  s += "<div class='card'><h2>Current Thermal Snapshot</h2><canvas id='tempBars' width='900' height='220'></canvas></div>";
+
+  s += "<script>";
+  s += "const MAX_POINTS=140; const obj=[],ref=[],amb=[],dt=[];";
+  s += "function push(a,v){a.push(v); if(a.length>MAX_POINTS) a.shift();}";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function movingAverage(arr,win=8){const out=[]; for(let i=0;i<arr.length;i++){let s=0,n=0; for(let j=Math.max(0,i-win+1);j<=i;j++){s+=arr[j];n++;} out.push(n?s/n:0);} return out;}";
+  s += "function rangeOf(series,opts={}){let all=[];series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v))));if(!all.length)return{min:0,max:1};let min=Math.min(...all),max=Math.max(...all);if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor);if(opts.zeroMin)min=0;if(max===min)max=min+1;const span=max-min,pad=span*(opts.paddingFrac||0.12);min-=opts.zeroMin?0:pad;max+=pad;if(opts.zeroMin&&min<0)min=0;return{min,max};}";
+  s += "function drawAdvancedChart(canvasId,series,colors,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}const rg=rangeOf(series,opts);function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;}series.forEach((arr,i)=>{if(!arr||arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+rg.min.toFixed(2),8,h-8);ctx.fillText('max:'+rg.max.toFixed(2),8,14);}";
+  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);const maxVal=Math.max(...values,maxFloor);const barW=Math.floor(w/values.length)-20;values.forEach((v,i)=>{const x=20+i*Math.floor(w/values.length);const bh=(v/maxVal)*(h-50);const y=h-bh-25;ctx.fillStyle=colors[i];ctx.fillRect(x,y,barW,bh);ctx.fillStyle='#ddd';ctx.font='12px Arial';ctx.fillText(labels[i],x,h-8);ctx.fillText(v.toFixed(2),x,y-6);});}";
+  s += "async function poll(){const r=await fetch('/api/analysis');const d=await r.json();setText('objF',d.objF.toFixed(2));setText('refF',d.refF.toFixed(2));setText('ambF',d.ambF.toFixed(2));setText('dTF',d.dTF.toFixed(2));setText('dmax',d.temperature.maxDelta.toFixed(2));setText('davg',d.temperature.avgDelta.toFixed(2));setText('rise',d.temperature.risingFast?'Yes':'No');push(obj,d.objF);push(ref,d.refF);push(amb,d.ambF);push(dt,d.dTF);drawAdvancedChart('tempChart',[obj,ref,amb],['#ffd54a','#4da3ff','#ff8c42'],{absoluteFloor:80,paddingFrac:0.08});drawAdvancedChart('deltaChart',[dt,movingAverage(dt,10)],['#ff4d9d','#ffffff'],{zeroMin:true,absoluteFloor:1,paddingFrac:0.15});drawBars('tempBars',['Object','Reference','Ambient','Delta'],[d.objF,d.refF,d.ambF,Math.max(0,d.dTF)],['#ffd54a','#4da3ff','#ff8c42','#ff4d9d'],1);}";
+  s += "setInterval(poll,500); poll();";
+  s += "</script>";
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveSoundPage() {
+  String s = htmlHeader("Live Sound");
+  s += "<h1>Live Sound</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>dB</b><br><span id='db'>-</span></div>";
+  s += "<div class='metric'><b>RMS</b><br><span id='rms'>-</span></div>";
+  s += "<div class='metric'><b>Hz</b><br><span id='hz'>-</span></div>";
+  s += "<div class='metric'><b>Peak</b><br><span id='peak'>-</span></div>";
+  s += "<div class='metric'><b>Max dB</b><br><span id='dbmax'>-</span></div>";
+  s += "<div class='metric'><b>Avg dB</b><br><span id='dbavg'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>dB and RMS Trend</h2><canvas id='soundChart' width='900' height='260'></canvas></div>";
+  s += "<div class='card'><h2>Frequency Trend</h2><canvas id='hzChart' width='900' height='220'></canvas></div>";
+  s += "<div class='card'><h2>Sound Snapshot</h2><canvas id='soundBars' width='900' height='220'></canvas></div>";
+
+  s += "<script>";
+  s += "const MAX_POINTS=140; const db=[],rms=[],hz=[];";
+  s += "function push(a,v){a.push(v); if(a.length>MAX_POINTS) a.shift();}";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function movingAverage(arr,win=8){const out=[];for(let i=0;i<arr.length;i++){let s=0,n=0;for(let j=Math.max(0,i-win+1);j<=i;j++){s+=arr[j];n++;}out.push(n?s/n:0);}return out;}";
+  s += "function rangeOf(series,opts={}){let all=[];series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v))));if(!all.length)return{min:0,max:1};let min=Math.min(...all),max=Math.max(...all);if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor);if(opts.zeroMin)min=0;if(max===min)max=min+1;const span=max-min,pad=span*(opts.paddingFrac||0.12);min-=opts.zeroMin?0:pad;max+=pad;if(opts.zeroMin&&min<0)min=0;return{min,max};}";
+  s += "function drawAdvancedChart(canvasId,series,colors,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}const rg=rangeOf(series,opts);function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;}series.forEach((arr,i)=>{if(!arr||arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+rg.min.toFixed(2),8,h-8);ctx.fillText('max:'+rg.max.toFixed(2),8,14);}";
+  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);const maxVal=Math.max(...values,maxFloor);const barW=Math.floor(w/values.length)-20;values.forEach((v,i)=>{const x=20+i*Math.floor(w/values.length);const bh=(v/maxVal)*(h-50);const y=h-bh-25;ctx.fillStyle=colors[i];ctx.fillRect(x,y,barW,bh);ctx.fillStyle='#ddd';ctx.font='12px Arial';ctx.fillText(labels[i],x,h-8);ctx.fillText(v.toFixed(2),x,y-6);});}";
+  s += "async function poll(){const r=await fetch('/api/analysis');const d=await r.json();setText('db',d.db.toFixed(2));setText('rms',d.rms.toFixed(2));setText('hz',d.hz.toFixed(1));setText('peak',d.peak);setText('dbmax',d.sound.maxDb.toFixed(2));setText('dbavg',d.sound.avgDb.toFixed(2));push(db,d.db);push(rms,d.rms);push(hz,d.hz);drawAdvancedChart('soundChart',[db,movingAverage(db,10)],['#3ddc84','#ffffff'],{zeroMin:true,absoluteFloor:10,paddingFrac:0.15});drawAdvancedChart('hzChart',[hz,movingAverage(hz,8)],['#ffd54a','#ff8c42'],{zeroMin:true,absoluteFloor:100,paddingFrac:0.15});drawBars('soundBars',['dB','RMS','Hz/100','Peak'],[d.db,d.rms,d.hz/100.0,d.peak],['#3ddc84','#4da3ff','#ffd54a','#ff4d4d'],1);}";
+  s += "setInterval(poll,400); poll();";
+  s += "</script>";
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveSoundFFTPage() {
+  String s = htmlHeader("Live Sound FFT");
+  s += "<h1>Live Sound FFT</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>Dominant Hz</b><br><span id='fft_dom_hz'>-</span></div>";
+  s += "<div class='metric'><b>Centroid Hz</b><br><span id='fft_centroid'>-</span></div>";
+  s += "<div class='metric'><b>Character</b><br><span id='fft_character'>-</span></div>";
+  s += "<div class='metric'><b>H2</b><br><span id='fft_h2'>-</span></div>";
+  s += "<div class='metric'><b>H3</b><br><span id='fft_h3'>-</span></div>";
+  s += "<div class='metric'><b>Low/Mid/High</b><br><span id='fft_bands'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Top Peaks</h2><div class='grid'>";
+  s += "<div class='metric'><b>Peak 1</b><br><span id='p1'>-</span></div>";
+  s += "<div class='metric'><b>Peak 2</b><br><span id='p2'>-</span></div>";
+  s += "<div class='metric'><b>Peak 3</b><br><span id='p3'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Spectrum</h2><canvas id='fftChart' width='900' height='280'></canvas></div>";
+  s += "<div class='card'><h2>Band Balance</h2><canvas id='fftBands' width='900' height='220'></canvas></div>";
+
+  s += "<script>";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function drawSpectrum(canvasId,hz,mag,peaks){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}if(!mag.length)return;const maxMag=Math.max(...mag,0.001);const maxHz=Math.max(...hz,1);for(let i=0;i<mag.length;i++){const x=(hz[i]/maxHz)*w;const bh=(mag[i]/maxMag)*(h-20);ctx.fillStyle='#ffd54a';ctx.fillRect(x,h-bh,Math.max(2,w/mag.length-2),bh);}ctx.strokeStyle='#ff4d4d';ctx.fillStyle='#ff4d4d';ctx.font='12px Arial';peaks.forEach((p,i)=>{if(!p||!p.hz)return;const x=(p.hz/maxHz)*w;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();ctx.fillText('P'+(i+1)+': '+p.hz.toFixed(1)+'Hz',Math.min(x+4,w-120),16+i*14);});ctx.fillStyle='#aaa';ctx.fillText('0 Hz',8,h-8);ctx.fillText(maxHz.toFixed(0)+' Hz',w-70,h-8);ctx.fillText('max mag: '+maxMag.toFixed(3),8,14);}";
+  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);const maxVal=Math.max(...values,maxFloor);const barW=Math.floor(w/values.length)-30;values.forEach((v,i)=>{const x=25+i*Math.floor(w/values.length);const bh=(v/maxVal)*(h-50);const y=h-bh-25;ctx.fillStyle=colors[i];ctx.fillRect(x,y,barW,bh);ctx.fillStyle='#ddd';ctx.font='12px Arial';ctx.fillText(labels[i],x,h-8);ctx.fillText(v.toFixed(3),x,y-6);});}";
+  s += "async function poll(){const r=await fetch('/api/sound_fft');const d=await r.json();setText('fft_dom_hz',d.dominantHz.toFixed(1));setText('fft_centroid',d.centroidHz.toFixed(1));setText('fft_character',d.character);setText('fft_h2',d.harmonic2?'Yes':'No');setText('fft_h3',d.harmonic3?'Yes':'No');setText('fft_bands',d.lowBand.toFixed(2)+' / '+d.midBand.toFixed(2)+' / '+d.highBand.toFixed(2));setText('p1',d.peaks[0].hz.toFixed(1)+' Hz | '+d.peaks[0].mag.toFixed(3));setText('p2',d.peaks[1].hz.toFixed(1)+' Hz | '+d.peaks[1].mag.toFixed(3));setText('p3',d.peaks[2].hz.toFixed(1)+' Hz | '+d.peaks[2].mag.toFixed(3));drawSpectrum('fftChart',d.hz,d.mag,d.peaks);drawBars('fftBands',['Low','Mid','High'],[d.lowBand,d.midBand,d.highBand],['#4da3ff','#3ddc84','#ff4d4d'],0.1);}";
+  s += "setInterval(poll,500);poll();";
+  s += "</script>";
+
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleSessions() {
+  String s = htmlHeader("Sessions");
+  s += "<h1>Sessions</h1>";
+  s += sd.listSessionsCardsHtml();
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleFiles() {
+  String s = htmlHeader("Sessions");
+  s += "<h1>Sessions</h1>";
+  std::vector<SessionInfo> sessions = sd.listSessions();
+
+  s += "<div class='card'>";
+  s += "<h2>Compare Sessions</h2>";
+  s += "<form method='GET' action='/compare'>";
+  s += "<label>Session A CSV</label><br>";
+  s += "<select name='a' style='width:100%;padding:8px;margin:8px 0 16px 0;'>";
+  for (size_t i = 0; i < sessions.size(); i++) {
+    if (sessions[i].hasCsv) {
+      String csvName = sessions[i].baseName + ".csv";
+      s += "<option value='" + htmlEscapeLocal(csvName) + "'>" + htmlEscapeLocal(csvName) + "</option>";
+    }
+  }
+  s += "</select>";
+  s += "<label>Session B CSV</label><br>";
+  s += "<select name='b' style='width:100%;padding:8px;margin:8px 0 16px 0;'>";
+  for (size_t i = 0; i < sessions.size(); i++) {
+    if (sessions[i].hasCsv) {
+      String csvName = sessions[i].baseName + ".csv";
+      s += "<option value='" + htmlEscapeLocal(csvName) + "'>" + htmlEscapeLocal(csvName) + "</option>";
+    }
+  }
+  s += "</select>";
+  s += "<button class='btn' type='submit'>Compare</button>";
+  s += "</form>";
+  s += "</div>";
+  s += sd.listSessionsCardsHtml();
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+static String contentTypeFromName(const String& name) {
+  if (name.endsWith(".wav")) return "audio/wav";
+  if (name.endsWith(".csv")) return "text/csv";
+  return "application/octet-stream";
+}
+
+void WebUI::handleDownload() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing file name");
+    return;
+  }
+
+  String name = server.arg("name");
+  if (!name.startsWith("/")) name = "/" + name;
+
+  File f = sd.openRead(name);
+  if (!f) {
+    server.send(404, "text/plain", "File not found");
+    return;
+  }
+
+  server.streamFile(f, contentTypeFromName(name));
+  f.close();
+}
+
+void WebUI::handleDelete() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing file name");
+    return;
+  }
+
+  String name = server.arg("name");
+  if (!name.startsWith("/")) name = "/" + name;
+
+  if (!sd.removeFile(name)) {
+    server.send(500, "text/plain", "Delete failed");
+    return;
+  }
+
+  server.sendHeader("Location", "/files");
+  server.send(303);
+}
+
+void WebUI::handleDeleteSession() {
+  if (!server.hasArg("base")) {
+    server.send(400, "text/plain", "Missing session base");
+    return;
+  }
+
+  String base = server.arg("base");
+  if (!base.startsWith("/")) base = "/" + base;
+
+  String csvName = base + ".csv";
+  String wavName = base + ".wav";
+  String metaName = base + ".meta.json";
+
+  bool ok = true;
+  if (sd.exists(csvName)) ok = sd.removeFile(csvName) && ok;
+  if (sd.exists(wavName)) ok = sd.removeFile(wavName) && ok;
+  if (sd.exists(metaName)) ok = sd.removeFile(metaName) && ok;
+
+  if (!ok) {
+    server.send(500, "text/plain", "Failed to delete session");
+    return;
+  }
+
+  server.sendHeader("Location", "/files");
+  server.send(303);
+}
+
+void WebUI::handleEditSessionPage() {
+  if (!server.hasArg("base")) {
+    server.send(400, "text/plain", "Missing session base");
+    return;
+  }
+
+  String base = server.arg("base");
+  if (!base.startsWith("/")) base = "/" + base;
+
+  SessionInfo info;
+  info.baseName = base;
+  sd.loadSessionMeta(base, info);
+
+  String s = htmlHeader("Edit Session");
+  s += "<h1>Edit Session</h1>";
+  s += "<div class='card'>";
+  s += "<form method='POST' action='/save_session_meta'>";
+  s += "<input type='hidden' name='base' value='" + htmlEscapeLocal(base) + "'>";
+  s += "<label>Tag</label><br>";
+  s += "<input type='text' name='tag' value='" + htmlEscapeLocal(info.tag) + "' style='width:100%;padding:8px;margin:8px 0 16px 0;'><br>";
+  s += "<label>Status</label><br>";
+  s += "<input type='text' name='status' value='" + htmlEscapeLocal(info.status) + "' style='width:100%;padding:8px;margin:8px 0 16px 0;'><br>";
+  s += "<label>Note</label><br>";
+  s += "<textarea name='note' style='width:100%;height:120px;padding:8px;margin:8px 0 16px 0;'>" + htmlEscapeLocal(info.note) + "</textarea><br>";
+  s += "<button class='btn' type='submit'>Save</button>";
+  s += "</form>";
+  s += "</div>";
+  s += htmlFooter();
+
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleSaveSessionMeta() {
+  if (!server.hasArg("base")) {
+    server.send(400, "text/plain", "Missing session base");
+    return;
+  }
+
+  String base = server.arg("base");
+  String tag = server.hasArg("tag") ? server.arg("tag") : "";
+  String status = server.hasArg("status") ? server.arg("status") : "";
+  String note = server.hasArg("note") ? server.arg("note") : "";
+
+  if (!sd.saveSessionMeta(base, tag, status, note)) {
+    server.send(500, "text/plain", "Failed to save metadata");
+    return;
+  }
+
+  server.sendHeader("Location", "/files");
+  server.send(303);
+}
+
+void WebUI::handleComparePage() {
+  if (!server.hasArg("a") || !server.hasArg("b")) {
+    server.send(400, "text/plain", "Missing compare files");
+    return;
+  }
+
+  String a = server.arg("a");
+  String b = server.arg("b");
+  if (!a.startsWith("/")) a = "/" + a;
+  if (!b.startsWith("/")) b = "/" + b;
+
+  String s = htmlHeader("Compare Sessions");
+  s += "<h1>Compare Sessions</h1>";
+  s += "<div class='card'><div class='muted'>A: " + htmlEscapeLocal(a) + "</div><div class='muted'>B: " + htmlEscapeLocal(b) + "</div></div>";
+  s += "<div class='card'><h2>Total Vibration</h2><canvas id='vibChart' width='900' height='260'></canvas></div>";
+  s += "<div class='card'><h2>Delta Temperature</h2><canvas id='tempChart' width='900' height='260'></canvas></div>";
+  s += "<div class='card'><h2>Sound dB</h2><canvas id='soundChart' width='900' height='260'></canvas></div>";
+  s += "<script>";
+  s += "function drawChart(canvasId,series,colors){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}let all=[];series.forEach(a=>all=all.concat(a));let max=Math.max(...all.map(v=>Math.abs(v)),0.001);function py(v){return h-(Math.abs(v)/max)*h;}series.forEach((arr,i)=>{if(arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});}";
+  s += "async function loadCsv(name){const r=await fetch('/api/file?name='+encodeURIComponent(name));const txt=await r.text();const lines=txt.trim().split(/\\r?\\n/);const out={vt:[],dt:[],db:[]};for(let i=1;i<lines.length;i++){const p=lines[i].split(',');if(p.length<12)continue;out.vt.push(parseFloat(p[4]||0));out.dt.push(parseFloat(p[8]||0));out.db.push(parseFloat(p[10]||0));}return out;}";
+  s += "async function run(){const a=await loadCsv('" + a + "');const b=await loadCsv('" + b + "');drawChart('vibChart',[a.vt,b.vt],['#4da3ff','#ff8c42']);drawChart('tempChart',[a.dt,b.dt],['#4da3ff','#ff8c42']);drawChart('soundChart',[a.db,b.db],['#4da3ff','#ff8c42']);}";
+  s += "run();";
+  s += "</script>";
+  s += htmlFooter();
+
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleRecordStart() {
+  if (startRecordingCb) startRecordingCb();
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void WebUI::handleRecordStop() {
+  if (stopRecordingCb) stopRecordingCb();
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void WebUI::handleSetVibrationFFTaxis() {
+  if (!vibrationFFTaxisPtr || !server.hasArg("axis")) {
+    server.send(400, "text/plain", "Missing axis");
+    return;
+  }
+
+  String axis = server.arg("axis");
+  if (axis == "X") *vibrationFFTaxisPtr = VIB_AXIS_X;
+  else if (axis == "Y") *vibrationFFTaxisPtr = VIB_AXIS_Y;
+  else if (axis == "Z") *vibrationFFTaxisPtr = VIB_AXIS_Z;
+  else if (axis == "MAG") *vibrationFFTaxisPtr = VIB_AXIS_MAG;
+
+  server.sendHeader("Location", "/live/vibration_fft");
+  server.send(303);
+}
+
+void WebUI::handleSetManualOverride() {
+  if (!manualOverridePtr || !server.hasArg("enabled")) {
+    server.send(400, "text/plain", "Missing override parameter");
+    return;
+  }
+
+  String enabled = server.arg("enabled");
+  *manualOverridePtr = (enabled == "1");
+
+  server.sendHeader("Location", "/overview");
+  server.send(303);
+}
+
+void WebUI::handleStatusJson() {
+  String s = "{";
+  s += "\"sd\":" + String(live.system.sdOK ? "true" : "false") + ",";
+  s += "\"recording\":" + String(live.system.recording ? "true" : "false") + ",";
+  s += "\"vtot\":" + String(live.vibration.total_in_s, 5) + ",";
+  s += "\"objF\":" + String(live.temperature.objF, 1) + ",";
+  s += "\"refF\":" + String(live.temperature.refF, 1) + ",";
+  s += "\"ambF\":" + String(live.temperature.ambF, 1) + ",";
+  s += "\"db\":" + String(live.sound.db, 1) + ",";
+  s += "\"hz\":" + String(live.sound.hz, 0);
+  s += "}";
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleLiveJson() {
+  String s = "{";
+  s += "\"sd\":" + String(live.system.sdOK ? "true" : "false") + ",";
+  s += "\"recording\":" + String(live.system.recording ? "true" : "false") + ",";
+  s += "\"vx\":" + String(live.vibration.x_in_s, 5) + ",";
+  s += "\"vy\":" + String(live.vibration.y_in_s, 5) + ",";
+  s += "\"vz\":" + String(live.vibration.z_in_s, 5) + ",";
+  s += "\"vtot\":" + String(live.vibration.total_in_s, 5) + ",";
+  s += "\"objF\":" + String(live.temperature.objF, 2) + ",";
+  s += "\"refF\":" + String(live.temperature.refF, 2) + ",";
+  s += "\"ambF\":" + String(live.temperature.ambF, 2) + ",";
+  s += "\"dTF\":" + String(live.temperature.deltaF, 2) + ",";
+  s += "\"db\":" + String(live.sound.db, 2) + ",";
+  s += "\"rms\":" + String(live.sound.rms, 2) + ",";
+  s += "\"hz\":" + String(live.sound.hz, 2);
+  s += "}";
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleAnalysisJson() {
+  String s = "{";
+  s += "\"sd\":" + String(live.system.sdOK ? "true" : "false") + ",";
+  s += "\"recording\":" + String(live.system.recording ? "true" : "false") + ",";
+  s += "\"recordingMode\":" + String((int)live.system.recordingMode) + ",";
+  s += "\"manualOverride\":" + String(live.system.manualOverride ? "true" : "false") + ",";
+  s += "\"statusText\":\"" + live.system.statusText + "\",";
+  s += "\"vx\":" + String(live.vibration.x_in_s, 5) + ",";
+  s += "\"vy\":" + String(live.vibration.y_in_s, 5) + ",";
+  s += "\"vz\":" + String(live.vibration.z_in_s, 5) + ",";
+  s += "\"vtot\":" + String(live.vibration.total_in_s, 5) + ",";
+  s += "\"objF\":" + String(live.temperature.objF, 2) + ",";
+  s += "\"refF\":" + String(live.temperature.refF, 2) + ",";
+  s += "\"ambF\":" + String(live.temperature.ambF, 2) + ",";
+  s += "\"dTF\":" + String(live.temperature.deltaF, 2) + ",";
+  s += "\"db\":" + String(live.sound.db, 2) + ",";
+  s += "\"rms\":" + String(live.sound.rms, 2) + ",";
+  s += "\"hz\":" + String(live.sound.hz, 2) + ",";
+  s += "\"peak\":" + String(live.sound.peak) + ",";
+
+  s += "\"mount\":{";
+  s += "\"state\":" + String((int)live.mount.state) + ",";
+  s += "\"confidence\":" + String(live.mount.confidence, 1) + ",";
+  s += "\"dynamicG\":" + String(live.mount.dynamicG, 4) + ",";
+  s += "\"driftG\":" + String(live.mount.driftG, 4) + ",";
+  s += "\"stableMs\":" + String(live.mount.stableMs) + ",";
+  s += "\"trusted\":" + String(live.mount.analysisTrusted ? "true" : "false");
+  s += "},";
+
+  s += "\"vibration\":{";
+  s += "\"currentTotal\":" + String(live.analysis.vibration.currentTotal, 5) + ",";
+  s += "\"maxTotal\":" + String(live.analysis.vibration.maxTotal, 5) + ",";
+  s += "\"avgTotal\":" + String(live.analysis.vibration.avgTotal, 5) + ",";
+  s += "\"dominantAxis\":\"" + live.analysis.vibration.dominantAxis + "\",";
+  s += "\"alert\":\"" + live.analysis.vibration.alert + "\"},";
+
+  s += "\"temperature\":{";
+  s += "\"currentDelta\":" + String(live.analysis.temperature.currentDelta, 2) + ",";
+  s += "\"maxDelta\":" + String(live.analysis.temperature.maxDelta, 2) + ",";
+  s += "\"avgDelta\":" + String(live.analysis.temperature.avgDelta, 2) + ",";
+  s += "\"risingFast\":" + String(live.analysis.temperature.risingFast ? "true" : "false") + ",";
+  s += "\"alert\":\"" + live.analysis.temperature.alert + "\"},";
+
+  s += "\"sound\":{";
+  s += "\"currentDb\":" + String(live.analysis.sound.currentDb, 2) + ",";
+  s += "\"maxDb\":" + String(live.analysis.sound.maxDb, 2) + ",";
+  s += "\"avgDb\":" + String(live.analysis.sound.avgDb, 2) + ",";
+  s += "\"dominantHz\":" + String(live.analysis.sound.dominantHz, 2) + ",";
+  s += "\"alert\":\"" + live.analysis.sound.alert + "\"}";
+  s += "}";
+
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleSoundSpectrumJson() {
+  String s = "{";
+  s += "\"dominantHz\":" + String(live.soundSpectrum.dominantHz, 2) + ",";
+  s += "\"dominantMag\":" + String(live.soundSpectrum.dominantMag, 4) + ",";
+  s += "\"centroidHz\":" + String(live.soundSpectrum.centroidHz, 2) + ",";
+  s += "\"lowBand\":" + String(live.soundSpectrum.lowBand, 4) + ",";
+  s += "\"midBand\":" + String(live.soundSpectrum.midBand, 4) + ",";
+  s += "\"highBand\":" + String(live.soundSpectrum.highBand, 4) + ",";
+  s += "\"character\":\"" + live.soundSpectrum.character + "\",";
+  s += "\"harmonic2\":" + String(live.soundSpectrum.harmonic2 ? "true" : "false") + ",";
+  s += "\"harmonic3\":" + String(live.soundSpectrum.harmonic3 ? "true" : "false") + ",";
+  s += "\"peaks\":[";
+  for (int i = 0; i < 3; i++) {
+    if (i) s += ",";
+    s += "{";
+    s += "\"hz\":" + String(live.soundSpectrum.peaks[i].hz, 2) + ",";
+    s += "\"mag\":" + String(live.soundSpectrum.peaks[i].mag, 4);
+    s += "}";
+  }
+  s += "],";
+  s += "\"bins\":" + String(live.soundSpectrum.bins) + ",";
+  s += "\"hz\":[";
+  for (int i = 0; i < live.soundSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.soundSpectrum.hz[i], 2);
+  }
+  s += "],";
+  s += "\"mag\":[";
+  for (int i = 0; i < live.soundSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.soundSpectrum.mag[i], 4);
+  }
+  s += "]";
+  s += "}";
+
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleVibrationSpectrumJson() {
+  String s = "{";
+  s += "\"dominantHz\":" + String(live.vibrationSpectrum.dominantHz, 2) + ",";
+  s += "\"dominantMag\":" + String(live.vibrationSpectrum.dominantMag, 4) + ",";
+  s += "\"lowBand\":" + String(live.vibrationSpectrum.lowBand, 4) + ",";
+  s += "\"midBand\":" + String(live.vibrationSpectrum.midBand, 4) + ",";
+  s += "\"highBand\":" + String(live.vibrationSpectrum.highBand, 4) + ",";
+  s += "\"sourceAxis\":\"" + live.vibrationSpectrum.sourceAxis + "\",";
+  s += "\"character\":\"" + live.vibrationSpectrum.character + "\",";
+  s += "\"harmonic2\":" + String(live.vibrationSpectrum.harmonic2 ? "true" : "false") + ",";
+  s += "\"harmonic3\":" + String(live.vibrationSpectrum.harmonic3 ? "true" : "false") + ",";
+  s += "\"peaks\":[";
+  for (int i = 0; i < 3; i++) {
+    if (i) s += ",";
+    s += "{";
+    s += "\"hz\":" + String(live.vibrationSpectrum.peaks[i].hz, 2) + ",";
+    s += "\"mag\":" + String(live.vibrationSpectrum.peaks[i].mag, 4);
+    s += "}";
+  }
+  s += "],";
+  s += "\"bins\":" + String(live.vibrationSpectrum.bins) + ",";
+  s += "\"hz\":[";
+  for (int i = 0; i < live.vibrationSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.vibrationSpectrum.hz[i], 2);
+  }
+  s += "],";
+  s += "\"mag\":[";
+  for (int i = 0; i < live.vibrationSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.vibrationSpectrum.mag[i], 4);
+  }
+  s += "]";
+  s += "}";
+
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleViewPage() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing CSV file name");
+    return;
+  }
+
+  String csvName = server.arg("name");
+  if (!csvName.startsWith("/")) csvName = "/" + csvName;
+
+  String wavName = csvName;
+  if (wavName.endsWith(".csv")) {
+    wavName.remove(wavName.length() - 4);
+    wavName += ".wav";
+  }
+
+  String baseName = csvName;
+  if (baseName.endsWith(".csv")) {
+    baseName.remove(baseName.length() - 4);
+  }
+
+  SessionInfo info;
+  info.baseName = baseName;
+  sd.loadSessionMeta(baseName, info);
+
+  bool wavExists = sd.exists(wavName);
+
+  String s = htmlHeader("Session Review");
+  s += "<h1>Session Review</h1>";
+
+  s += "<div class='card'>";
+  s += "<div class='muted'><b>Session:</b> " + htmlEscapeLocal(baseName) + "</div>";
+  s += "<div class='muted'><b>CSV:</b> " + htmlEscapeLocal(csvName) + "</div>";
+  s += "<div class='muted'><b>WAV:</b> " + htmlEscapeLocal(wavName) + "</div>";
+  if (info.tag.length()) s += "<div class='muted'><b>Tag:</b> " + htmlEscapeLocal(info.tag) + "</div>";
+  if (info.status.length()) s += "<div class='muted'><b>Status:</b> " + htmlEscapeLocal(info.status) + "</div>";
+  if (info.note.length()) s += "<div class='muted'><b>Note:</b> " + htmlEscapeLocal(info.note) + "</div>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Inspection Report</h2>";
+  s += "<div class='grid'>";
+  s += "<div class='metric'><b>Overall Alert</b><br><span id='rep_overall'>-</span></div>";
+  s += "<div class='metric'><b>Vibration Alert</b><br><span id='rep_vib_alert'>-</span></div>";
+  s += "<div class='metric'><b>Temp Alert</b><br><span id='rep_temp_alert'>-</span></div>";
+  s += "<div class='metric'><b>Sound Alert</b><br><span id='rep_sound_alert'>-</span></div>";
+  s += "</div>";
+  s += "<div style='margin-top:14px;'><b>Interpretation</b><br><div id='rep_text' class='muted'>Loading...</div></div>";
+  s += "<div style='margin-top:14px;'><b>Suggested Focus</b><br><div id='rep_focus' class='muted'>Loading...</div></div>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Session Summary</h2>";
+  s += "<div class='grid'>";
+  s += "<div class='metric'><b>Max Total Vib</b><br><span id='sum_max_vib'>-</span></div>";
+  s += "<div class='metric'><b>Avg Total Vib</b><br><span id='sum_avg_vib'>-</span></div>";
+  s += "<div class='metric'><b>Dominant Axis</b><br><span id='sum_axis'>-</span></div>";
+  s += "<div class='metric'><b>Samples</b><br><span id='sum_samples'>-</span></div>";
+  s += "<div class='metric'><b>Max Delta Temp</b><br><span id='sum_max_dt'>-</span></div>";
+  s += "<div class='metric'><b>Avg Delta Temp</b><br><span id='sum_avg_dt'>-</span></div>";
+  s += "<div class='metric'><b>Max dB</b><br><span id='sum_max_db'>-</span></div>";
+  s += "<div class='metric'><b>Avg dB</b><br><span id='sum_avg_db'>-</span></div>";
+  s += "<div class='metric'><b>Max Hz</b><br><span id='sum_max_hz'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Audio Playback</h2>";
+  bool activeRecording = live.system.recording && live.system.currentBaseName.length() && wavName.startsWith(live.system.currentBaseName);
+  if (activeRecording) {
+    s += "<div class='muted'>WAV finalizes when recording stops.</div>";
+  } else if (wavExists) {
+    s += "<audio id='sessionAudio' controls style='width:100%;'>";
+    s += "<source src='/api/file?name=" + wavName + "' type='audio/wav'>";
+    s += "Your browser does not support WAV playback.";
+    s += "</audio>";
+    s += "<div class='muted' style='margin-top:8px;'>Playback cursor is synchronized with charts.</div>";
+    s += "<div style='margin-top:10px;'>";
+    s += "<a class='btn' href='/download?name=" + wavName + "'>Download WAV</a>";
+    s += "</div>";
+  } else {
+    s += "<div class='muted'>Matching WAV not found.</div>";
+  }
+  s += "</div>";
+
+  s += "<div class='card'><h2>Vibration</h2>";
+  s += "<canvas id='vibChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#ff4d4d'></span>X</span>";
+  s += "<span><span class='dot' style='background:#3ddc84'></span>Y</span>";
+  s += "<span><span class='dot' style='background:#4da3ff'></span>Z</span>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>TOT</span>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Temperature</h2>";
+  s += "<canvas id='tempChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>Object</span>";
+  s += "<span><span class='dot' style='background:#4da3ff'></span>Reference</span>";
+  s += "<span><span class='dot' style='background:#ff8c42'></span>Ambient</span>";
+  s += "<span><span class='dot' style='background:#ff4d9d'></span>Delta</span>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Sound</h2>";
+  s += "<canvas id='soundChart' width='900' height='260'></canvas>";
+  s += "<div class='legend'>";
+  s += "<span><span class='dot' style='background:#3ddc84'></span>dB</span>";
+  s += "<span><span class='dot' style='background:#ffd54a'></span>Hz/100</span>";
+  s += "</div></div>";
+
+  s += "<script>";
+  s += "const reviewState={vib:{x:[],y:[],z:[],t:[]},temp:{obj:[],ref:[],amb:[],dt:[]},sound:{db:[],hz:[]},cursorRatio:null,hoverIndex:null,sampleCount:0};";
+  s += "function setText(id,val){document.getElementById(id).textContent=val;}";
+  s += "function avg(arr){if(!arr.length)return 0;return arr.reduce((a,b)=>a+b,0)/arr.length;}";
+  s += "function maxv(arr){if(!arr.length)return 0;return Math.max(...arr);}";
+  s += "function estimateDuration(){const audio=document.getElementById('sessionAudio');if(audio&&audio.duration&&Number.isFinite(audio.duration)&&audio.duration>0)return audio.duration;return reviewState.sampleCount*0.05;}";
+  s += "function ratioToIndex(r){if(reviewState.sampleCount<=1)return 0;const idx=Math.round(r*(reviewState.sampleCount-1));return Math.max(0,Math.min(reviewState.sampleCount-1,idx));}";
+  s += "function indexToTime(idx){const dur=estimateDuration();if(reviewState.sampleCount<=1)return 0;return (idx/(reviewState.sampleCount-1))*dur;}";
+  s += "function formatTime(sec){sec=Math.max(0,sec||0);const m=Math.floor(sec/60);const ss=sec%60;return m+':'+(ss<10?'0':'')+ss.toFixed(1);}";
+  s += "function drawChart(canvasId,series,colors,allowNegative=false,cursorRatio=null,tooltipBuilder=null){";
+  s += "const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;";
+  s += "ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);";
+  s += "ctx.strokeStyle='#2d2d2d';ctx.lineWidth=1;";
+  s += "for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}";
+  s += "for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}";
+  s += "let all=[];series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v))));";
+  s += "let min=allowNegative?Math.min(...all,-0.001):0;let max=Math.max(...all,0.001);if(max===min)max=min+1;";
+  s += "function py(v){return h-((v-min)/(max-min))*h;}";
+  s += "series.forEach((arr,i)=>{if(arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});";
+  s += "if(cursorRatio!==null&&Number.isFinite(cursorRatio)){const cx=Math.max(0,Math.min(w,cursorRatio*w));ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();}";
+  s += "if(reviewState.hoverIndex!==null&&reviewState.sampleCount>1){const hx=(reviewState.hoverIndex/(reviewState.sampleCount-1))*w;ctx.strokeStyle='#ff66ff';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(hx,0);ctx.lineTo(hx,h);ctx.stroke();if(tooltipBuilder){const lines=tooltipBuilder(reviewState.hoverIndex);const pad=6,lineH=14;ctx.font='12px Arial';let boxW=0;lines.forEach(line=>{boxW=Math.max(boxW,ctx.measureText(line).width);});const boxH=lines.length*lineH+pad*2;let bx=hx+10;if(bx+boxW+pad*2>w)bx=hx-boxW-pad*2-10;let by=10;ctx.fillStyle='rgba(0,0,0,0.82)';ctx.fillRect(bx,by,boxW+pad*2,boxH);ctx.strokeStyle='#888';ctx.strokeRect(bx,by,boxW+pad*2,boxH);ctx.fillStyle='#fff';lines.forEach((line,i)=>ctx.fillText(line,bx+pad,by+pad+12+i*lineH));}}";
+  s += "ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+min.toFixed(3),8,h-8);ctx.fillText('max:'+max.toFixed(3),8,14);";
+  s += "}";
+  s += "function redrawReviewCharts(){";
+  s += "drawChart('vibChart',[reviewState.vib.x,reviewState.vib.y,reviewState.vib.z,reviewState.vib.t],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],true,reviewState.cursorRatio,(idx)=>['t='+formatTime(indexToTime(idx)),'X='+reviewState.vib.x[idx].toFixed(5),'Y='+reviewState.vib.y[idx].toFixed(5),'Z='+reviewState.vib.z[idx].toFixed(5),'TOT='+reviewState.vib.t[idx].toFixed(5)]);";
+  s += "drawChart('tempChart',[reviewState.temp.obj,reviewState.temp.ref,reviewState.temp.amb,reviewState.temp.dt],['#ffd54a','#4da3ff','#ff8c42','#ff4d9d'],false,reviewState.cursorRatio,(idx)=>['t='+formatTime(indexToTime(idx)),'Obj='+reviewState.temp.obj[idx].toFixed(2),'Ref='+reviewState.temp.ref[idx].toFixed(2),'Amb='+reviewState.temp.amb[idx].toFixed(2),'dT='+reviewState.temp.dt[idx].toFixed(2)]);";
+  s += "drawChart('soundChart',[reviewState.sound.db,reviewState.sound.hz.map(v=>v/100.0)],['#3ddc84','#ffd54a'],false,reviewState.cursorRatio,(idx)=>['t='+formatTime(indexToTime(idx)),'dB='+reviewState.sound.db[idx].toFixed(2),'Hz='+reviewState.sound.hz[idx].toFixed(1)]);";
+  s += "}";
+
+  s += "function makeInterpretation(vibAlert,tempAlert,soundAlert,axis){";
+  s += "let parts=[];";
+  s += "if(vibAlert==='High')parts.push('Vibration is elevated with strongest activity on axis '+axis+'.');";
+  s += "else if(vibAlert==='Watch')parts.push('Vibration is above baseline watch level, especially on axis '+axis+'.');";
+  s += "else parts.push('Vibration remains within normal range for this session.');";
+  s += "if(tempAlert==='High')parts.push('Temperature delta is significantly elevated.');";
+  s += "else if(tempAlert==='Watch')parts.push('Temperature delta is above normal watch level.');";
+  s += "else parts.push('Temperature behavior appears stable.');";
+  s += "if(soundAlert==='High')parts.push('Acoustic level is high and may indicate roughness or abnormal load.');";
+  s += "else if(soundAlert==='Watch')parts.push('Sound level is above normal watch level.');";
+  s += "else parts.push('Sound trend appears normal.');";
+  s += "return parts.join(' ');";
+  s += "}";
+
+  s += "function makeFocus(vibAlert,tempAlert,soundAlert,axis){";
+  s += "if(vibAlert==='High')return 'Inspect mechanical condition first: mounting, imbalance, looseness, or axis '+axis+' related components.';";
+  s += "if(tempAlert==='High')return 'Inspect thermal causes: friction, overload, cooling, or contact condition.';";
+  s += "if(soundAlert==='High')return 'Review acoustic signature and listen to WAV for roughness, impacts, or abnormal tonal behavior.';";
+  s += "if(vibAlert==='Watch'||tempAlert==='Watch'||soundAlert==='Watch')return 'Monitor trend and compare against prior sessions before maintenance decision.';";
+  s += "return 'No major issue flagged in this recording. Use comparison mode against prior sessions for confirmation.';";
+  s += "}";
+  s += "function bindAudioCursor(){";
+  s += "const audio=document.getElementById('sessionAudio');if(!audio)return;";
+  s += "function updateCursor(){if(!audio.duration||!Number.isFinite(audio.duration)||audio.duration<=0){reviewState.cursorRatio=null;}else{reviewState.cursorRatio=audio.currentTime/audio.duration;}redrawReviewCharts();}";
+  s += "audio.addEventListener('timeupdate',updateCursor);audio.addEventListener('play',updateCursor);audio.addEventListener('pause',updateCursor);audio.addEventListener('seeked',updateCursor);audio.addEventListener('loadedmetadata',updateCursor);";
+  s += "audio.addEventListener('ended',()=>{reviewState.cursorRatio=1;redrawReviewCharts();});";
+  s += "}";
+  s += "function bindChartSeek(canvasId){";
+  s += "const c=document.getElementById(canvasId);const audio=document.getElementById('sessionAudio');if(!c)return;";
+  s += "c.addEventListener('mousemove',(e)=>{const rect=c.getBoundingClientRect();const ratio=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));reviewState.hoverIndex=ratioToIndex(ratio);redrawReviewCharts();});";
+  s += "c.addEventListener('mouseleave',()=>{reviewState.hoverIndex=null;redrawReviewCharts();});";
+  s += "c.addEventListener('click',(e)=>{if(!audio||!audio.duration||!Number.isFinite(audio.duration)||audio.duration<=0)return;const rect=c.getBoundingClientRect();const ratio=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));audio.currentTime=ratio*audio.duration;reviewState.cursorRatio=ratio;redrawReviewCharts();});";
+  s += "}";
+
+  s += "async function loadCsv(){";
+  s += "const r=await fetch('/api/file?name=" + csvName + "');";
+  s += "const txt=await r.text();";
+  s += "const lines=txt.trim().split(/\\r?\\n/);";
+  s += "if(lines.length<2) return;";
+  s += "reviewState.sampleCount=0;";
+
+  s += "for(let i=1;i<lines.length;i++){";
+  s += "const p=lines[i].split(',');";
+  s += "if(p.length<12) continue;";
+  s += "reviewState.vib.x.push(parseFloat(p[1]||0));";
+  s += "reviewState.vib.y.push(parseFloat(p[2]||0));";
+  s += "reviewState.vib.z.push(parseFloat(p[3]||0));";
+  s += "reviewState.vib.t.push(parseFloat(p[4]||0));";
+  s += "reviewState.temp.obj.push(parseFloat(p[5]||0));";
+  s += "reviewState.temp.ref.push(parseFloat(p[6]||0));";
+  s += "reviewState.temp.amb.push(parseFloat(p[7]||0));";
+  s += "reviewState.temp.dt.push(parseFloat(p[8]||0));";
+  s += "reviewState.sound.db.push(parseFloat(p[10]||0));";
+  s += "reviewState.sound.hz.push(parseFloat(p[11]||0));";
+  s += "reviewState.sampleCount++;";
+  s += "}";
+
+  s += "const ax=reviewState.vib.x.reduce((m,v)=>Math.max(m,Math.abs(v)),0);";
+  s += "const ay=reviewState.vib.y.reduce((m,v)=>Math.max(m,Math.abs(v)),0);";
+  s += "const az=reviewState.vib.z.reduce((m,v)=>Math.max(m,Math.abs(v)),0);";
+  s += "let axis='X';if(ay>=ax&&ay>=az)axis='Y';else if(az>=ax&&az>=ay)axis='Z';";
+  s += "const absV=reviewState.vib.t.map(v=>Math.abs(v));";
+  s += "const maxV=maxv(absV),avgV=avg(absV);";
+  s += "const maxDT=maxv(reviewState.temp.dt),avgDT=avg(reviewState.temp.dt);";
+  s += "const maxDB=maxv(reviewState.sound.db),avgDB=avg(reviewState.sound.db),maxHZ=maxv(reviewState.sound.hz);";
+  s += "let vibAlert='Normal';if(maxV>=0.15)vibAlert='High';else if(maxV>=0.05)vibAlert='Watch';";
+  s += "let tempAlert='Normal';if(maxDT>=15)tempAlert='High';else if(maxDT>=5)tempAlert='Watch';";
+  s += "let soundAlert='Normal';if(maxDB>=55)soundAlert='High';else if(maxDB>=40)soundAlert='Watch';";
+  s += "let overall='Normal';";
+  s += "if(vibAlert==='High'||tempAlert==='High'||soundAlert==='High')overall='High';";
+  s += "else if(vibAlert==='Watch'||tempAlert==='Watch'||soundAlert==='Watch')overall='Watch';";
+  s += "setText('rep_overall',overall);";
+  s += "setText('rep_vib_alert',vibAlert);";
+  s += "setText('rep_temp_alert',tempAlert);";
+  s += "setText('rep_sound_alert',soundAlert);";
+  s += "setText('rep_text',makeInterpretation(vibAlert,tempAlert,soundAlert,axis));";
+  s += "setText('rep_focus',makeFocus(vibAlert,tempAlert,soundAlert,axis));";
+  s += "setText('sum_max_vib',maxV.toFixed(5)+' in/s');";
+  s += "setText('sum_avg_vib',avgV.toFixed(5)+' in/s');";
+  s += "setText('sum_axis',axis);";
+  s += "setText('sum_max_dt',maxDT.toFixed(2)+' F');";
+  s += "setText('sum_avg_dt',avgDT.toFixed(2)+' F');";
+  s += "setText('sum_samples',reviewState.sampleCount.toString());";
+  s += "setText('sum_max_db',maxDB.toFixed(2));";
+  s += "setText('sum_avg_db',avgDB.toFixed(2));";
+  s += "setText('sum_max_hz',maxHZ.toFixed(1));";
+  s += "redrawReviewCharts();";
+  s += "bindAudioCursor();";
+  s += "bindChartSeek('vibChart');";
+  s += "bindChartSeek('tempChart');";
+  s += "bindChartSeek('soundChart');";
+  s += "}";
+
+  s += "loadCsv();";
+  s += "</script>";
+
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleFileRaw() {
+  if (!server.hasArg("name")) {
+    server.send(400, "text/plain", "Missing file name");
+    return;
+  }
+
+  String name = server.arg("name");
+  if (!name.startsWith("/")) name = "/" + name;
+
+  File f = sd.openRead(name);
+  if (!f) {
+    server.send(404, "text/plain", "File not found");
+    return;
+  }
+
+  server.streamFile(f, contentTypeFromName(name));
+  f.close();
+}
