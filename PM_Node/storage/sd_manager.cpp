@@ -128,6 +128,18 @@ static String fileSizeString(size_t bytes) {
   return String(bytes / 1024.0f / 1024.0f, 2) + " MB";
 }
 
+static String formatDurationMs(unsigned long ms) {
+  float sec = ms / 1000.0f;
+  if (sec < 60.0f) return String(sec, 1) + " s";
+
+  int minPart = (int)(sec / 60.0f);
+  float secPart = sec - (minPart * 60.0f);
+  String out = String(minPart) + "m ";
+  if (secPart < 10.0f) out += "0";
+  out += String(secPart, 1) + "s";
+  return out;
+}
+
 bool SDManager::saveSessionMeta(const String& baseName, const String& tag, const String& status, const String& note) {
   if (!ready) return false;
 
@@ -190,6 +202,7 @@ bool SDManager::loadSessionSummary(const String& baseName, SessionSummary& summa
     f.close();
     return false;
   }
+  bool hasTrustColumns = line.indexOf("trusted") >= 0;
 
   float sumVib = 0.0f;
   float sumDT = 0.0f;
@@ -202,32 +215,51 @@ bool SDManager::loadSessionSummary(const String& baseName, SessionSummary& summa
   float maxAbsY = 0.0f;
   float maxAbsZ = 0.0f;
   int count = 0;
+  int totalCount = 0;
+  int trustedCount = 0;
+  bool firstTrustedSeen = false;
+  unsigned long firstTrustedMs = 0;
+  unsigned long lastTrustedMs = 0;
 
   while (f.available()) {
     line = f.readStringUntil('\n');
     line.trim();
     if (!line.length()) continue;
 
-    float vals[12] = {0};
+    float vals[15] = {0};
     int idx = 0;
     int start = 0;
 
-    for (int i = 0; i <= (int)line.length() && idx < 12; i++) {
+    for (int i = 0; i <= (int)line.length() && idx < 15; i++) {
       if (i == (int)line.length() || line[i] == ',') {
         vals[idx++] = line.substring(start, i).toFloat();
         start = i + 1;
       }
     }
 
-    if (idx < 12) continue;
+    if (hasTrustColumns && idx < 15) continue;
+    if (!hasTrustColumns && idx < 12) continue;
 
-    float vx = vals[1];
-    float vy = vals[2];
-    float vz = vals[3];
-    float vt = vals[4];
-    float dT = vals[8];
-    float dB = vals[10];
-    float hz = vals[11];
+    totalCount++;
+    bool trusted = !hasTrustColumns || ((int)vals[1] == 1);
+    if (!trusted) continue;
+
+    trustedCount++;
+
+    unsigned long ms = (unsigned long)vals[0];
+    if (!firstTrustedSeen) {
+      firstTrustedSeen = true;
+      firstTrustedMs = ms;
+    }
+    lastTrustedMs = ms;
+
+    float vx = hasTrustColumns ? vals[4] : vals[1];
+    float vy = hasTrustColumns ? vals[5] : vals[2];
+    float vz = hasTrustColumns ? vals[6] : vals[3];
+    float vt = hasTrustColumns ? vals[7] : vals[4];
+    float dT = hasTrustColumns ? vals[11] : vals[8];
+    float dB = hasTrustColumns ? vals[13] : vals[10];
+    float hz = hasTrustColumns ? vals[14] : vals[11];
 
     float ax = fabs(vx);
     float ay = fabs(vy);
@@ -249,7 +281,17 @@ bool SDManager::loadSessionSummary(const String& baseName, SessionSummary& summa
   }
 
   f.close();
-  if (count == 0) return false;
+  summary.totalSamples = totalCount;
+  summary.trustedSamples = trustedCount;
+  summary.firstTrustedMs = firstTrustedSeen ? firstTrustedMs : 0;
+  summary.lastTrustedMs = firstTrustedSeen ? lastTrustedMs : 0;
+  summary.validDurationMs = (firstTrustedSeen && lastTrustedMs >= firstTrustedMs) ? (lastTrustedMs - firstTrustedMs) : 0;
+  summary.trustedRatio = (totalCount > 0) ? (100.0f * trustedCount / totalCount) : 0.0f;
+  if (count == 0) {
+    summary.valid = false;
+    summary.overallAlert = "Untrusted";
+    return false;
+  }
 
   summary.valid = true;
   summary.maxTotalVib = maxVib;
@@ -451,6 +493,11 @@ String SDManager::listSessionsCardsHtml() {
     s += "<div class='muted'>WAV: ";
     s += sessions[i].hasWav ? (String("Yes (") + fileSizeString(sessions[i].wavSize) + ")") : String("No");
     s += "</div>";
+
+    if (sessions[i].summary.totalSamples > 0) {
+      s += "<div class='muted'><b>Trusted:</b> " + String(sessions[i].summary.trustedSamples) + " / " + String(sessions[i].summary.totalSamples) + " (" + String(sessions[i].summary.trustedRatio, 1) + "%)</div>";
+      s += "<div class='muted'><b>Valid window:</b> " + formatDurationMs(sessions[i].summary.validDurationMs) + "</div>";
+    }
 
     if (sessions[i].summary.valid) {
       s += "<hr style='border-color:#333;margin:12px 0;'>";

@@ -71,6 +71,12 @@ struct SystemState {
 
 struct SessionSummary {
   bool valid = false;
+  int totalSamples = 0;
+  int trustedSamples = 0;
+  unsigned long firstTrustedMs = 0;
+  unsigned long lastTrustedMs = 0;
+  unsigned long validDurationMs = 0;
+  float trustedRatio = 0.0f;
 
   float maxTotalVib = 0.0f;
   float avgTotalVib = 0.0f;

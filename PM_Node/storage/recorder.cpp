@@ -29,7 +29,7 @@ bool Recorder::start() {
 
   for (int i = 0; i < 44; i++) wavFile.write((uint8_t)0);
 
-  csvFile.println("ms,vx_in_s,vy_in_s,vz_in_s,vtot_in_s,objF,refF,ambF,dTF,soundRms,dBrel,freqHz");
+  csvFile.println("ms,trusted,mount_state,mount_confidence,vx_in_s,vy_in_s,vz_in_s,vtot_in_s,objF,refF,ambF,dTF,soundRms,dBrel,freqHz");
 
   wavDataBytes = 0;
   recording = true;
@@ -71,6 +71,10 @@ void Recorder::appendCsvRow(const LiveData& data, unsigned long sessionMs) {
   if (!recording || !csvFile) return;
 
   csvFile.print(sessionMs); csvFile.print(",");
+  csvFile.print(data.mount.analysisTrusted ? 1 : 0); csvFile.print(",");
+  csvFile.print((int)data.mount.state); csvFile.print(",");
+  csvFile.print(data.mount.confidence, 1); csvFile.print(",");
+
   csvFile.print(data.vibration.x_in_s, 5); csvFile.print(",");
   csvFile.print(data.vibration.y_in_s, 5); csvFile.print(",");
   csvFile.print(data.vibration.z_in_s, 5); csvFile.print(",");
