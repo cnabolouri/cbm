@@ -14,6 +14,11 @@ public:
   void nextPage();
   void prevPage();
 
+  bool getThermalPointerRequest(int& x, int& y);
+  bool getThermalPanRequest(float& x, float& y);
+  void setTouchPoint(int x, int y, bool pressed);
+  bool consumeThermalRangeToggleRequest();
+  bool consumeThermalZoomCycleRequest();
   void render(const LiveData& live, int touchX, int touchY);
 
 private:
@@ -23,12 +28,15 @@ private:
   void drawDashboardChrome();
   void drawVibrationChrome();
   void drawTemperatureChrome();
+  void drawThermalChrome();
   void drawSoundChrome();
   void drawSystemChrome();
 
   void updateDashboard(const LiveData& live);
   void updateVibration(const LiveData& live);
   void updateTemperature(const LiveData& live);
+  void updateThermal(const LiveData& live);
+  void drawThermalPage(const LiveData& live);
   void updateSound(const LiveData& live);
   void updateSystem(const LiveData& live, int touchX, int touchY);
 
@@ -46,6 +54,18 @@ private:
   Page lastDrawnPage = (Page)(-1);
   unsigned long lastUiUpdateMs = 0;
   const unsigned long UI_UPDATE_MS = 250;
+
+  int lastTouchX = 0;
+  int lastTouchY = 0;
+  bool lastTouchPressed = false;
+
+  int pendingThermalX = -1;
+  int pendingThermalY = -1;
+  float pendingThermalCenterX = -1.0f;
+  float pendingThermalCenterY = -1.0f;
+  bool thermalRangeToggleRequested = false;
+  bool thermalZoomCycleRequested = false;
+  ThermalDisplayState lastThermalDisplay;
 
   static const int HISTORY_LEN = 140;
   float vibX[HISTORY_LEN] = {0};

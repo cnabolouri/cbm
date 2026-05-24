@@ -2,12 +2,14 @@
 #define PM_NODE_TYPES_H
 
 #include <Arduino.h>
+#include "config.h"
 
 enum Page {
   PAGE_VIB = 0,
   PAGE_TEMP = 1,
-  PAGE_SOUND = 2,
-  PAGE_SYS = 3
+  PAGE_THERMAL = 2,
+  PAGE_SOUND = 3,
+  PAGE_SYS = 4
 };
 
 enum VibrationAxis {
@@ -45,6 +47,45 @@ struct TemperatureData {
   float refF = 0.0f;
   float ambF = 0.0f;
   float deltaF = 0.0f;
+};
+
+struct ThermalFrameData {
+  static const int RAW_W = 32;
+  static const int RAW_H = 24;
+  static const int RAW_PIXELS = RAW_W * RAW_H;
+
+  bool valid = false;
+
+  float pixelsF[RAW_PIXELS] = {0};
+
+  float minF = 0.0f;
+  float maxF = 0.0f;
+
+  float hotspotF = 0.0f;
+  int hotspotX = 0;
+  int hotspotY = 0;
+
+  float centerF = 0.0f;
+
+  float pointerF = 0.0f;
+  int pointerX = RAW_W / 2;
+  int pointerY = RAW_H / 2;
+
+  float ambientF = 0.0f;
+};
+
+enum ThermalRangeMode {
+  THERMAL_RANGE_AUTO = 0,
+  THERMAL_RANGE_FIXED = 1
+};
+
+struct ThermalDisplayState {
+  ThermalRangeMode rangeMode = THERMAL_RANGE_AUTO;
+  float fixedMinF = THERMAL_FIXED_MIN_F;
+  float fixedMaxF = THERMAL_FIXED_MAX_F;
+  float zoom = 1.0f;
+  float centerX = (THERMAL_W - 1) * 0.5f;
+  float centerY = (THERMAL_H - 1) * 0.5f;
 };
 
 struct SoundData {
@@ -196,6 +237,8 @@ struct LiveData {
   SoundSpectrumData soundSpectrum;
   VibrationSpectrumData vibrationSpectrum;
   MountData mount;
+  ThermalFrameData thermal;
+  ThermalDisplayState thermalDisplay;
 };
 
 #endif // PM_NODE_TYPES_H

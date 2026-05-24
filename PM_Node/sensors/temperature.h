@@ -1,10 +1,9 @@
 #pragma once
 #include <Arduino.h>
-#include <Wire.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <Adafruit_MLX90614.h>
 #include "../types.h"
+#include "../config.h"
 
 class TemperatureSensor {
 public:
@@ -13,8 +12,6 @@ public:
   void update(TemperatureData& out);
 
 private:
-  TwoWire i2c;
-  Adafruit_MLX90614 mlx;
   OneWire oneWire;
   DallasTemperature ds;
 

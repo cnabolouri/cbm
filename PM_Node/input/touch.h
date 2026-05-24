@@ -9,6 +9,7 @@ public:
     TOUCH_NONE,
     TOUCH_TAB_VIB,
     TOUCH_TAB_TEMP,
+    TOUCH_TAB_THERMAL,
     TOUCH_TAB_SOUND,
     TOUCH_TAB_SYS,
     TOUCH_PREV_PAGE,
@@ -32,6 +33,7 @@ public:
   EventType update();
   int lastX() const;
   int lastY() const;
+  bool isPressed() const;
 
 private:
   bool readMappedPoint(int &sx, int &sy);
@@ -50,4 +52,5 @@ private:
   unsigned long lastTouchMs = 0;
   int touchX = 0;
   int touchY = 0;
+  bool touchPressed = false;
 };

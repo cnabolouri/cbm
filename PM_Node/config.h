@@ -37,10 +37,25 @@ static const float LSB_PER_G_10G = 51200.0f;
 static const float G_TO_MPS2 = 9.80665f;
 static const float MPS_TO_INS = 39.3701f;
 
-// ========================= TEMP =========================
+// ========================= TEMP / THERMAL =========================
 #define I2C_SDA 8
 #define I2C_SCL 9
 #define PIN_DS18B20 7
+
+static const int THERMAL_W = 32;
+static const int THERMAL_H = 24;
+static const int THERMAL_PIXELS = THERMAL_W * THERMAL_H;
+
+static const int MLX90640_REFRESH_HZ = 2;
+
+static const int THERMAL_DRAW_W_TFT = 64;
+static const int THERMAL_DRAW_H_TFT = 48;
+
+static const int THERMAL_DRAW_W_WEB = 96;
+static const int THERMAL_DRAW_H_WEB = 72;
+
+static const float THERMAL_FIXED_MIN_F = 70.0f;
+static const float THERMAL_FIXED_MAX_F = 140.0f;
 
 // ========================= MIC =========================
 #define PIN_I2S_BCLK 5

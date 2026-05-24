@@ -1,5 +1,6 @@
 #include "web_ui.h"
 #include "../config.h"
+#include <math.h>
 
 WebUI::WebUI(SDManager& sdRef, Recorder& recorderRef, LiveData& liveRef)
   : sd(sdRef), recorder(recorderRef), live(liveRef), server(80) {}
@@ -51,6 +52,25 @@ void WebUI::setManualOverrideRef(bool* overridePtrIn) {
   manualOverridePtr = overridePtrIn;
 }
 
+void WebUI::setThermalRangeRefs(ThermalRangeMode* modePtr, float* minPtr, float* maxPtr) {
+  thermalRangeModePtr = modePtr;
+  thermalFixedMinPtr = minPtr;
+  thermalFixedMaxPtr = maxPtr;
+}
+
+void WebUI::setThermalZoomRef(float* zoomPtr) {
+  thermalZoomPtr = zoomPtr;
+}
+
+void WebUI::setThermalCenterRefs(float* cxPtr, float* cyPtr) {
+  thermalCenterXPtr = cxPtr;
+  thermalCenterYPtr = cyPtr;
+}
+
+void WebUI::setThermalPointerCallback(std::function<void(int,int)> cb) {
+  thermalPointerSetter = cb;
+}
+
 void WebUI::initWiFiAP() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASS);
@@ -85,6 +105,7 @@ String WebUI::htmlHeader(const String& title) {
   s += "<a href='/live/vibration'>Vibration</a>";
   s += "<a href='/live/vibration_fft'>Vibration FFT</a>";
   s += "<a href='/live/temperature'>Temperature</a>";
+  s += "<a href='/live/thermal'>Thermal</a>";
   s += "<a href='/live/sound'>Sound</a>";
   s += "<a href='/live/sound_fft'>Sound FFT</a>";
   s += "<a href='/files'>Sessions</a>";
@@ -103,6 +124,7 @@ void WebUI::initRoutes() {
   server.on("/live/vibration", HTTP_GET, [this]() { handleLiveVibrationPage(); });
   server.on("/live/vibration_fft", HTTP_GET, [this]() { handleLiveVibrationFFTPage(); });
   server.on("/live/temperature", HTTP_GET, [this]() { handleLiveTemperaturePage(); });
+  server.on("/live/thermal", HTTP_GET, [this]() { handleLiveThermalPage(); });
   server.on("/live/sound", HTTP_GET, [this]() { handleLiveSoundPage(); });
   server.on("/live/sound_fft", HTTP_GET, [this]() { handleLiveSoundFFTPage(); });
   server.on("/sessions", HTTP_GET, [this]() { handleSessions(); });
@@ -117,9 +139,14 @@ void WebUI::initRoutes() {
   server.on("/record/stop", HTTP_GET, [this]() { handleRecordStop(); });
   server.on("/set_vibration_fft_axis", HTTP_GET, [this]() { handleSetVibrationFFTaxis(); });
   server.on("/set_manual_override", HTTP_GET, [this]() { handleSetManualOverride(); });
+  server.on("/set_thermal_range_mode", HTTP_GET, [this]() { handleSetThermalRangeMode(); });
+  server.on("/set_thermal_zoom", HTTP_GET, [this]() { handleSetThermalZoom(); });
+  server.on("/set_thermal_center", HTTP_GET, [this]() { handleSetThermalCenter(); });
+  server.on("/set_thermal_pointer", HTTP_GET, [this]() { handleSetThermalPointer(); });
   server.on("/api/status", HTTP_GET, [this]() { handleStatusJson(); });
   server.on("/api/live", HTTP_GET, [this]() { handleLiveJson(); });
   server.on("/api/analysis", HTTP_GET, [this]() { handleAnalysisJson(); });
+  server.on("/api/thermal_frame", HTTP_GET, [this]() { handleThermalFrameJson(); });
   server.on("/api/sound_fft", HTTP_GET, [this]() { handleSoundSpectrumJson(); });
   server.on("/api/vibration_fft", HTTP_GET, [this]() { handleVibrationSpectrumJson(); });
   server.on("/view", HTTP_GET, [this]() { handleViewPage(); });
@@ -406,6 +433,59 @@ void WebUI::handleLiveTemperaturePage() {
   s += "async function poll(){const r=await fetch('/api/analysis');const d=await r.json();setText('objF',d.objF.toFixed(2));setText('refF',d.refF.toFixed(2));setText('ambF',d.ambF.toFixed(2));setText('dTF',d.dTF.toFixed(2));setText('dmax',d.temperature.maxDelta.toFixed(2));setText('davg',d.temperature.avgDelta.toFixed(2));setText('rise',d.temperature.risingFast?'Yes':'No');push(obj,d.objF);push(ref,d.refF);push(amb,d.ambF);push(dt,d.dTF);drawAdvancedChart('tempChart',[obj,ref,amb],['#ffd54a','#4da3ff','#ff8c42'],{absoluteFloor:80,paddingFrac:0.08});drawAdvancedChart('deltaChart',[dt,movingAverage(dt,10)],['#ff4d9d','#ffffff'],{zeroMin:true,absoluteFloor:1,paddingFrac:0.15});drawBars('tempBars',['Object','Reference','Ambient','Delta'],[d.objF,d.refF,d.ambF,Math.max(0,d.dTF)],['#ffd54a','#4da3ff','#ff8c42','#ff4d9d'],1);}";
   s += "setInterval(poll,500); poll();";
   s += "</script>";
+  s += htmlFooter();
+  server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveThermalPage() {
+  String s = htmlHeader("Live Thermal");
+  s += "<h1>Live Thermal</h1>";
+
+  s += "<div class='card'><div class='grid'>";
+  s += "<div class='metric'><b>Hotspot</b><br><span id='hotF'>-</span></div>";
+  s += "<div class='metric'><b>Pointer</b><br><span id='ptrF'>-</span></div>";
+  s += "<div class='metric'><b>Range</b><br><span id='rngF'>-</span></div>";
+  s += "<div class='metric'><b>Hotspot XY</b><br><span id='hotXY'>-</span></div>";
+  s += "<div class='metric'><b>Mode</b><br><span id='rangeMode'>-</span></div>";
+  s += "<div class='metric'><b>Zoom</b><br><span id='zoomMode'>-</span></div>";
+  s += "<div class='metric'><b>Center</b><br><span id='centerXY'>-</span></div>";
+  s += "</div></div>";
+
+  s += "<div class='card'><h2>Thermal Range Control</h2>";
+  s += "<a class='btn' href='/set_thermal_range_mode?mode=auto'>Auto Range</a> ";
+  s += "<a class='btn' href='/set_thermal_range_mode?mode=fixed&minF=70&maxF=120'>Fixed 70-120F</a> ";
+  s += "<a class='btn' href='/set_thermal_range_mode?mode=fixed&minF=80&maxF=140'>Fixed 80-140F</a> ";
+  s += "<a class='btn' href='/set_thermal_range_mode?mode=fixed&minF=100&maxF=200'>Fixed 100-200F</a>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Thermal Zoom</h2>";
+  s += "<a class='btn' href='/set_thermal_zoom?z=1'>1x</a> ";
+  s += "<a class='btn' href='/set_thermal_zoom?z=2'>2x</a> ";
+  s += "<a class='btn' href='/set_thermal_zoom?z=3'>3x</a>";
+  s += "<div class='muted' style='margin-top:8px;'>Click the thermal image to center the zoom view.</div>";
+  s += "</div>";
+
+  s += "<div class='card'><canvas id='thermalCanvas' width='640' height='480' style='max-width:100%;border:1px solid #333;'></canvas></div>";
+
+  s += "<script>";
+  s += "const canvas=document.getElementById('thermalCanvas');";
+  s += "const ctx=canvas.getContext('2d');";
+  s += "let lastFrame=null;";
+  s += "function setText(id,v){document.getElementById(id).textContent=v;}";
+  s += "function colorMap(v,minV,maxV){let t=(v-minV)/Math.max(0.001,maxV-minV);if(t<0)t=0;if(t>1)t=1;const r=Math.floor(255*Math.min(1,Math.max(0,1.5*t)));const g=Math.floor(255*Math.min(1,Math.max(0,1.5*(1-Math.abs(t-0.5)*2))));const b=Math.floor(255*Math.min(1,Math.max(0,1.5*(1-t))));return `rgb(${r},${g},${b})`;}";
+  s += "function bilinearSample(arr,w,h,x,y){const x0=Math.floor(x),y0=Math.floor(y);const x1=Math.min(w-1,x0+1),y1=Math.min(h-1,y0+1);const tx=x-x0,ty=y-y0;const q00=arr[y0*w+x0],q10=arr[y0*w+x1],q01=arr[y1*w+x0],q11=arr[y1*w+x1];const a=q00*(1-tx)+q10*tx;const b=q01*(1-tx)+q11*tx;return a*(1-ty)+b*ty;}";
+  s += "function cropWindow(d){const zoom=d.zoom||1.0;const cropW=d.w/zoom,cropH=d.h/zoom;let x0=(d.centerX??((d.w-1)*0.5))-(cropW-1)*0.5;let y0=(d.centerY??((d.h-1)*0.5))-(cropH-1)*0.5;if(x0<0)x0=0;if(y0<0)y0=0;if(x0+cropW>d.w)x0=d.w-cropW;if(y0+cropH>d.h)y0=d.h-cropH;if(x0<0)x0=0;if(y0<0)y0=0;return{x0,y0,cropW,cropH};}";
+  s += "function drawThermal(d){const drawW=";
+  s += String(THERMAL_DRAW_W_WEB);
+  s += ",drawH=";
+  s += String(THERMAL_DRAW_H_WEB);
+  s += ";const cellW=canvas.width/drawW,cellH=canvas.height/drawH;ctx.clearRect(0,0,canvas.width,canvas.height);const minF=d.rangeMode==='auto'?d.minF:d.fixedMinF;const maxF=d.rangeMode==='auto'?d.maxF:d.fixedMaxF;const c=cropWindow(d);for(let yy=0;yy<drawH;yy++){for(let xx=0;xx<drawW;xx++){const sx=c.x0+(xx/(drawW-1))*(c.cropW-1);const sy=c.y0+(yy/(drawH-1))*(c.cropH-1);const v=bilinearSample(d.pixelsF,d.w,d.h,sx,sy);ctx.fillStyle=colorMap(v,minF,maxF);ctx.fillRect(xx*cellW,yy*cellH,cellW+1,cellH+1);}}const hx=((d.hotspotX-c.x0)/Math.max(0.001,c.cropW-1))*canvas.width;const hy=((d.hotspotY-c.y0)/Math.max(0.001,c.cropH-1))*canvas.height;if(hx>=0&&hx<=canvas.width&&hy>=0&&hy<=canvas.height){ctx.strokeStyle='red';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx-10,hy);ctx.lineTo(hx+10,hy);ctx.moveTo(hx,hy-10);ctx.lineTo(hx,hy+10);ctx.stroke();}const px=((d.pointerX-c.x0)/Math.max(0.001,c.cropW-1))*canvas.width;const py=((d.pointerY-c.y0)/Math.max(0.001,c.cropH-1))*canvas.height;if(px>=0&&px<=canvas.width&&py>=0&&py<=canvas.height){ctx.strokeStyle='white';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px-8,py);ctx.lineTo(px+8,py);ctx.moveTo(px,py-8);ctx.lineTo(px,py+8);ctx.stroke();}}";
+  s += "canvas.addEventListener('mousemove',async(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;const y=e.clientY-rect.top;const c=cropWindow(lastFrame);let tx=Math.round(c.x0+(x/rect.width)*(c.cropW-1));let ty=Math.round(c.y0+(y/rect.height)*(c.cropH-1));tx=Math.max(0,Math.min(lastFrame.w-1,tx));ty=Math.max(0,Math.min(lastFrame.h-1,ty));fetch(`/set_thermal_pointer?x=${tx}&y=${ty}`).catch(()=>{});});";
+  s += "canvas.addEventListener('click',async(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;const y=e.clientY-rect.top;const c=cropWindow(lastFrame);const tx=c.x0+(x/rect.width)*(c.cropW-1);const ty=c.y0+(y/rect.height)*(c.cropH-1);fetch(`/set_thermal_center?x=${tx.toFixed(2)}&y=${ty.toFixed(2)}`).catch(()=>{});});";
+  s += "async function poll(){try{const r=await fetch('/api/thermal_frame');const txt=await r.text();const d=JSON.parse(txt);if(!d.valid)return;lastFrame=d;const minF=d.rangeMode==='auto'?d.minF:d.fixedMinF;const maxF=d.rangeMode==='auto'?d.maxF:d.fixedMaxF;setText('hotF',d.hotspotF.toFixed(2)+' F');setText('ptrF',d.pointerF.toFixed(2)+' F');setText('rngF',minF.toFixed(1)+' - '+maxF.toFixed(1)+' F');setText('hotXY','('+d.hotspotX+','+d.hotspotY+')');setText('rangeMode',d.rangeMode==='auto'?'AUTO':('FIXED '+d.fixedMinF.toFixed(0)+'-'+d.fixedMaxF.toFixed(0)+' F'));setText('zoomMode',d.zoom.toFixed(1)+'x');setText('centerXY','('+d.centerX.toFixed(1)+','+d.centerY.toFixed(1)+')');drawThermal(d);}catch(err){console.error('Thermal fetch/parse error:',err);}}";
+  s += "setInterval(poll,400);poll();";
+  s += "</script>";
+
   s += htmlFooter();
   server.send(200, "text/html", s);
 }
@@ -709,6 +789,97 @@ void WebUI::handleSetManualOverride() {
   server.send(303);
 }
 
+void WebUI::handleSetThermalRangeMode() {
+  if (!thermalRangeModePtr || !server.hasArg("mode")) {
+    server.send(400, "text/plain", "Missing mode");
+    return;
+  }
+
+  String mode = server.arg("mode");
+  if (mode == "auto") {
+    *thermalRangeModePtr = THERMAL_RANGE_AUTO;
+  } else if (mode == "fixed") {
+    *thermalRangeModePtr = THERMAL_RANGE_FIXED;
+  } else {
+    server.send(400, "text/plain", "Invalid mode");
+    return;
+  }
+
+  if (thermalFixedMinPtr && server.hasArg("minF")) {
+    *thermalFixedMinPtr = server.arg("minF").toFloat();
+  }
+  if (thermalFixedMaxPtr && server.hasArg("maxF")) {
+    *thermalFixedMaxPtr = server.arg("maxF").toFloat();
+  }
+  if (thermalFixedMinPtr && thermalFixedMaxPtr && *thermalFixedMaxPtr <= *thermalFixedMinPtr) {
+    *thermalFixedMaxPtr = *thermalFixedMinPtr + 1.0f;
+  }
+
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
+void WebUI::handleSetThermalZoom() {
+  if (!thermalZoomPtr || !server.hasArg("z")) {
+    server.send(400, "text/plain", "Missing zoom");
+    return;
+  }
+
+  float z = server.arg("z").toFloat();
+  if (z < 1.0f) z = 1.0f;
+  if (z > 3.0f) z = 3.0f;
+
+  if (z < 1.5f) z = 1.0f;
+  else if (z < 2.5f) z = 2.0f;
+  else z = 3.0f;
+
+  *thermalZoomPtr = z;
+
+  if (z == 1.0f && thermalCenterXPtr && thermalCenterYPtr) {
+    *thermalCenterXPtr = (THERMAL_W - 1) * 0.5f;
+    *thermalCenterYPtr = (THERMAL_H - 1) * 0.5f;
+  }
+
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
+void WebUI::handleSetThermalCenter() {
+  if (!thermalCenterXPtr || !thermalCenterYPtr || !server.hasArg("x") || !server.hasArg("y")) {
+    server.send(400, "text/plain", "Missing x/y");
+    return;
+  }
+
+  float x = server.arg("x").toFloat();
+  float y = server.arg("y").toFloat();
+
+  if (x < 0.0f) x = 0.0f;
+  if (x > THERMAL_W - 1) x = THERMAL_W - 1;
+  if (y < 0.0f) y = 0.0f;
+  if (y > THERMAL_H - 1) y = THERMAL_H - 1;
+
+  *thermalCenterXPtr = x;
+  *thermalCenterYPtr = y;
+
+  server.send(200, "text/plain", "OK");
+}
+
+void WebUI::handleSetThermalPointer() {
+  if (!server.hasArg("x") || !server.hasArg("y")) {
+    server.send(400, "text/plain", "Missing x/y");
+    return;
+  }
+
+  int x = server.arg("x").toInt();
+  int y = server.arg("y").toInt();
+
+  if (thermalPointerSetter) {
+    thermalPointerSetter(x, y);
+  }
+
+  server.send(200, "text/plain", "OK");
+}
+
 void WebUI::handleStatusJson() {
   String s = "{";
   s += "\"sd\":" + String(live.system.sdOK ? "true" : "false") + ",";
@@ -793,6 +964,42 @@ void WebUI::handleAnalysisJson() {
   s += "\"alert\":\"" + live.analysis.sound.alert + "\"}";
   s += "}";
 
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleThermalFrameJson() {
+  String s = "{";
+  s += "\"valid\":";
+  s += live.thermal.valid ? "true" : "false";
+  s += ",";
+  s += "\"w\":32,";
+  s += "\"h\":24,";
+  s += "\"rangeMode\":\"";
+  s += (live.thermalDisplay.rangeMode == THERMAL_RANGE_AUTO) ? "auto" : "fixed";
+  s += "\",";
+  s += "\"fixedMinF\":" + String(live.thermalDisplay.fixedMinF, 2) + ",";
+  s += "\"fixedMaxF\":" + String(live.thermalDisplay.fixedMaxF, 2) + ",";
+  s += "\"zoom\":" + String(live.thermalDisplay.zoom, 1) + ",";
+  s += "\"centerX\":" + String(live.thermalDisplay.centerX, 2) + ",";
+  s += "\"centerY\":" + String(live.thermalDisplay.centerY, 2) + ",";
+  s += "\"minF\":" + String(isfinite(live.thermal.minF) ? live.thermal.minF : 0.0f, 2) + ",";
+  s += "\"maxF\":" + String(isfinite(live.thermal.maxF) ? live.thermal.maxF : 0.0f, 2) + ",";
+  s += "\"hotspotF\":" + String(isfinite(live.thermal.hotspotF) ? live.thermal.hotspotF : 0.0f, 2) + ",";
+  s += "\"hotspotX\":" + String(live.thermal.hotspotX) + ",";
+  s += "\"hotspotY\":" + String(live.thermal.hotspotY) + ",";
+  s += "\"pointerF\":" + String(isfinite(live.thermal.pointerF) ? live.thermal.pointerF : 0.0f, 2) + ",";
+  s += "\"pointerX\":" + String(live.thermal.pointerX) + ",";
+  s += "\"pointerY\":" + String(live.thermal.pointerY) + ",";
+  s += "\"centerF\":" + String(isfinite(live.thermal.centerF) ? live.thermal.centerF : 0.0f, 2) + ",";
+  s += "\"ambientF\":" + String(isfinite(live.thermal.ambientF) ? live.thermal.ambientF : 0.0f, 2) + ",";
+  s += "\"pixelsF\":[";
+  for (int i = 0; i < THERMAL_PIXELS; i++) {
+    if (i) s += ",";
+    float v = live.thermal.pixelsF[i];
+    if (!isfinite(v)) v = 0.0f;
+    s += String(v, 2);
+  }
+  s += "]}";
   server.send(200, "application/json", s);
 }
 

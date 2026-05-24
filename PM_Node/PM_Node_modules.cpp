@@ -7,6 +7,7 @@
 #include "analysis/mount_detector.cpp"
 #include "sensors/adxl357.cpp"
 #include "sensors/temperature.cpp"
+#include "sensors/thermal_camera_sensor.cpp"
 #include "sensors/microphone.cpp"
 #include "storage/sd_manager.cpp"
 #include "storage/recorder.cpp"

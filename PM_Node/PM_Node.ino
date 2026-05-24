@@ -8,6 +8,7 @@
 
 #include "sensors/adxl357.h"
 #include "sensors/temperature.h"
+#include "sensors/thermal_camera_sensor.h"
 #include "sensors/microphone.h"
 
 #include "storage/sd_manager.h"
@@ -48,6 +49,7 @@ MountDetector mountDetector;
 
 ADXL357Sensor vibrationSensor;
 TemperatureSensor temperatureSensor;
+ThermalCameraSensor thermalCameraSensor;
 MicrophoneSensor microphoneSensor;
 
 ButtonInput button(
@@ -85,6 +87,12 @@ unsigned long lastVibrationFftMs = 0;
 RecordingMode recordingMode = REC_IDLE;
 bool manualOverride = false;
 String lastActionMessage = "";
+ThermalRangeMode thermalRangeMode = THERMAL_RANGE_AUTO;
+float thermalFixedMinF = THERMAL_FIXED_MIN_F;
+float thermalFixedMaxF = THERMAL_FIXED_MAX_F;
+float thermalZoom = 1.0f;
+float thermalCenterX = (THERMAL_W - 1) * 0.5f;
+float thermalCenterY = (THERMAL_H - 1) * 0.5f;
 
 // =====================================================
 // HELPERS
@@ -203,6 +211,10 @@ void handleTouchEvent(TouchInput::EventType evt) {
       tftUI.setPage(PAGE_TEMP);
       break;
 
+    case TouchInput::TOUCH_TAB_THERMAL:
+      tftUI.setPage(PAGE_THERMAL);
+      break;
+
     case TouchInput::TOUCH_TAB_SOUND:
       tftUI.setPage(PAGE_SOUND);
       break;
@@ -231,6 +243,12 @@ void updateSystemState() {
   live.system.currentBaseName = recorder.currentBaseName();
   live.system.recordingMode = recordingMode;
   live.system.manualOverride = manualOverride;
+  live.thermalDisplay.rangeMode = thermalRangeMode;
+  live.thermalDisplay.fixedMinF = thermalFixedMinF;
+  live.thermalDisplay.fixedMaxF = thermalFixedMaxF;
+  live.thermalDisplay.zoom = thermalZoom;
+  live.thermalDisplay.centerX = thermalCenterX;
+  live.thermalDisplay.centerY = thermalCenterY;
 
   if (recordingMode == REC_ARMED_WAITING_MOUNT) {
     live.system.statusText = "Waiting for stable mount...";
@@ -265,6 +283,15 @@ void updateSensors(float dt) {
 
   microphoneSensor.update(live.sound);
   temperatureSensor.update(live.temperature);
+  thermalCameraSensor.update(live.thermal);
+
+  if (live.thermal.valid) {
+    live.temperature.objF = live.thermal.hotspotF;
+    live.temperature.ambF = live.thermal.centerF;
+    live.temperature.deltaF = (live.temperature.refF > 0.0f)
+      ? live.thermal.hotspotF - live.temperature.refF
+      : 0.0f;
+  }
 
   unsigned long nowMs = millis();
   if (isAnalysisTrustedNow()) {
@@ -336,7 +363,9 @@ void setup() {
   // Sensors
   bool adxlOK = vibrationSensor.begin();
   bool tempOK = temperatureSensor.begin();
+  bool thermalOK = thermalCameraSensor.begin();
   bool micOK  = microphoneSensor.begin();
+  Serial.println(thermalOK ? "MLX90640 ready" : "MLX90640 not found");
   vibrationSampler.begin(200.0f);
   mountDetector.begin();
 
@@ -362,6 +391,12 @@ void setup() {
   webUI.setStatusMessageSource(&lastActionMessage);
   webUI.setVibrationFFTaxisRef(&selectedVibrationFFTaxis);
   webUI.setManualOverrideRef(&manualOverride);
+  webUI.setThermalRangeRefs(&thermalRangeMode, &thermalFixedMinF, &thermalFixedMaxF);
+  webUI.setThermalZoomRef(&thermalZoom);
+  webUI.setThermalCenterRefs(&thermalCenterX, &thermalCenterY);
+  webUI.setThermalPointerCallback([](int x, int y) {
+    thermalCameraSensor.setPointer(x, y);
+  });
   webUI.begin();
 
   // Timing
@@ -384,17 +419,21 @@ void setup() {
   tft.print(tempOK ? "OK" : "FAIL");
 
   tft.setCursor(16, 108);
+  tft.print("MLX : ");
+  tft.print(thermalOK ? "OK" : "FAIL");
+
+  tft.setCursor(16, 134);
   tft.print("MIC : ");
   tft.print(micOK ? "OK" : "FAIL");
 
-  tft.setCursor(16, 134);
+  tft.setCursor(16, 160);
   tft.print("SD  : ");
   tft.print(sdOK ? "OK" : "FAIL");
 
   tft.setTextSize(1);
-  tft.setCursor(16, 174);
+  tft.setCursor(16, 190);
   tft.print("Short press = record");
-  tft.setCursor(16, 188);
+  tft.setCursor(16, 202);
   tft.print("Long press = next page");
 
   delay(1000);
@@ -412,8 +451,45 @@ void loop() {
   webUI.handleClient();
 
   // Inputs
+  TouchInput::EventType touchEvent = touch.update();
+  tftUI.setTouchPoint(touch.lastX(), touch.lastY(), touch.isPressed());
+
+  bool consumedThermalTouch = false;
+  if (tftUI.consumeThermalRangeToggleRequest()) {
+    thermalRangeMode = (thermalRangeMode == THERMAL_RANGE_AUTO)
+      ? THERMAL_RANGE_FIXED
+      : THERMAL_RANGE_AUTO;
+    consumedThermalTouch = true;
+  }
+  if (tftUI.consumeThermalZoomCycleRequest()) {
+    if (thermalZoom < 1.5f) thermalZoom = 2.0f;
+    else if (thermalZoom < 2.5f) thermalZoom = 3.0f;
+    else thermalZoom = 1.0f;
+
+    if (thermalZoom == 1.0f) {
+      thermalCenterX = (THERMAL_W - 1) * 0.5f;
+      thermalCenterY = (THERMAL_H - 1) * 0.5f;
+    }
+    consumedThermalTouch = true;
+  }
+
   handleButtonEvent(button.update());
-  handleTouchEvent(touch.update());
+  if (!consumedThermalTouch) {
+    handleTouchEvent(touchEvent);
+  }
+
+  int thermalX = 0;
+  int thermalY = 0;
+  if (tftUI.getThermalPointerRequest(thermalX, thermalY)) {
+    thermalCameraSensor.setPointer(thermalX, thermalY);
+  }
+
+  float thermalPanX = 0.0f;
+  float thermalPanY = 0.0f;
+  if (tftUI.getThermalPanRequest(thermalPanX, thermalPanY)) {
+    thermalCenterX = thermalPanX;
+    thermalCenterY = thermalPanY;
+  }
 
   // Sensor timing
   unsigned long now = micros();

@@ -49,18 +49,23 @@ bool TouchInput::readMappedPoint(int &sx, int &sy) {
 
 TouchInput::EventType TouchInput::update() {
   int x, y;
-  if (!readMappedPoint(x, y)) return TOUCH_NONE;
+  if (!readMappedPoint(x, y)) {
+    touchPressed = false;
+    return TOUCH_NONE;
+  }
 
   touchX = x;
   touchY = y;
+  touchPressed = true;
 
   if (millis() - lastTouchMs < 250) return TOUCH_NONE;
   lastTouchMs = millis();
 
   if (y >= 200) {
-    if (x < 80) return TOUCH_TAB_VIB;
-    if (x < 160) return TOUCH_TAB_TEMP;
-    if (x < 240) return TOUCH_TAB_SOUND;
+    if (x < 64) return TOUCH_TAB_VIB;
+    if (x < 128) return TOUCH_TAB_TEMP;
+    if (x < 192) return TOUCH_TAB_THERMAL;
+    if (x < 256) return TOUCH_TAB_SOUND;
     return TOUCH_TAB_SYS;
   }
 
@@ -76,4 +81,8 @@ int TouchInput::lastX() const {
 
 int TouchInput::lastY() const {
   return touchY;
+}
+
+bool TouchInput::isPressed() const {
+  return touchPressed;
 }

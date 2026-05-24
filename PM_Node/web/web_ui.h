@@ -17,6 +17,10 @@ public:
   void setStatusMessageSource(String* statusMsg);
   void setVibrationFFTaxisRef(VibrationAxis* axisPtr);
   void setManualOverrideRef(bool* overridePtrIn);
+  void setThermalRangeRefs(ThermalRangeMode* modePtr, float* minPtr, float* maxPtr);
+  void setThermalZoomRef(float* zoomPtr);
+  void setThermalCenterRefs(float* cxPtr, float* cyPtr);
+  void setThermalPointerCallback(std::function<void(int,int)> cb);
 
 private:
   void initWiFiAP();
@@ -31,6 +35,7 @@ private:
   void handleLiveVibrationPage();
   void handleLiveVibrationFFTPage();
   void handleLiveTemperaturePage();
+  void handleLiveThermalPage();
   void handleLiveSoundPage();
   void handleLiveSoundFFTPage();
   void handleSessions();
@@ -45,9 +50,14 @@ private:
   void handleRecordStop();
   void handleSetVibrationFFTaxis();
   void handleSetManualOverride();
+  void handleSetThermalRangeMode();
+  void handleSetThermalZoom();
+  void handleSetThermalCenter();
+  void handleSetThermalPointer();
   void handleStatusJson();
   void handleLiveJson();
   void handleAnalysisJson();
+  void handleThermalFrameJson();
   void handleSoundSpectrumJson();
   void handleVibrationSpectrumJson();
 
@@ -63,4 +73,11 @@ private:
   String* statusMessagePtr = nullptr;
   VibrationAxis* vibrationFFTaxisPtr = nullptr;
   bool* manualOverridePtr = nullptr;
+  ThermalRangeMode* thermalRangeModePtr = nullptr;
+  float* thermalFixedMinPtr = nullptr;
+  float* thermalFixedMaxPtr = nullptr;
+  float* thermalZoomPtr = nullptr;
+  float* thermalCenterXPtr = nullptr;
+  float* thermalCenterYPtr = nullptr;
+  std::function<void(int,int)> thermalPointerSetter;
 };
