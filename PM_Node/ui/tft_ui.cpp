@@ -12,34 +12,68 @@ static float clampf(float v, float lo, float hi) {
   return v;
 }
 
-static uint16_t thermalColor565(float tempF, float minF, float maxF) {
-  float span = (maxF - minF) > 0.001f ? (maxF - minF) : 0.001f;
-  float t = clampf((tempF - minF) / span, 0.0f, 1.0f);
+static uint16_t thermalColor565(float tempF, float minF, float maxF, ThermalPalette palette) {
+  float t = (tempF - minF) / ((maxF - minF) > 0.001f ? (maxF - minF) : 0.001f);
+  t = clampf(t, 0.0f, 1.0f);
 
   uint8_t r = 0;
   uint8_t g = 0;
   uint8_t b = 0;
 
-  if (t < 0.25f) {
-    float u = t / 0.25f;
-    r = 0;
-    g = (uint8_t)(255.0f * u);
-    b = 255;
-  } else if (t < 0.50f) {
-    float u = (t - 0.25f) / 0.25f;
-    r = 0;
-    g = 255;
-    b = (uint8_t)(255.0f * (1.0f - u));
-  } else if (t < 0.75f) {
-    float u = (t - 0.50f) / 0.25f;
-    r = (uint8_t)(255.0f * u);
-    g = 255;
-    b = 0;
-  } else {
-    float u = (t - 0.75f) / 0.25f;
-    r = 255;
-    g = (uint8_t)(255.0f * (1.0f - u));
-    b = 0;
+  switch (palette) {
+    case THERMAL_PALETTE_GRAYSCALE: {
+      uint8_t v = (uint8_t)(255.0f * t);
+      r = v;
+      g = v;
+      b = v;
+      break;
+    }
+
+    case THERMAL_PALETTE_RAINBOW: {
+      if (t < 0.25f) {
+        float u = t / 0.25f;
+        r = 0;
+        g = (uint8_t)(255.0f * u);
+        b = 255;
+      } else if (t < 0.50f) {
+        float u = (t - 0.25f) / 0.25f;
+        r = 0;
+        g = 255;
+        b = (uint8_t)(255.0f * (1.0f - u));
+      } else if (t < 0.75f) {
+        float u = (t - 0.50f) / 0.25f;
+        r = (uint8_t)(255.0f * u);
+        g = 255;
+        b = 0;
+      } else {
+        float u = (t - 0.75f) / 0.25f;
+        r = 255;
+        g = (uint8_t)(255.0f * (1.0f - u));
+        b = 0;
+      }
+      break;
+    }
+
+    case THERMAL_PALETTE_IRON:
+    default: {
+      if (t < 0.33f) {
+        float u = t / 0.33f;
+        r = (uint8_t)(80.0f * u);
+        g = 0;
+        b = (uint8_t)(40.0f + 100.0f * u);
+      } else if (t < 0.66f) {
+        float u = (t - 0.33f) / 0.33f;
+        r = (uint8_t)(80.0f + 120.0f * u);
+        g = (uint8_t)(40.0f * u);
+        b = (uint8_t)(140.0f * (1.0f - u));
+      } else {
+        float u = (t - 0.66f) / 0.34f;
+        r = 255;
+        g = (uint8_t)(60.0f + 195.0f * u);
+        b = (uint8_t)(20.0f * (1.0f - u));
+      }
+      break;
+    }
   }
 
   return rgb565(r, g, b);
@@ -123,6 +157,27 @@ void TFTUI::setTouchPoint(int x, int y, bool pressed) {
     return;
   }
 
+  if (!wasPressed &&
+      x >= 280 && x <= 319 &&
+      y >= 52 && y <= 76) {
+    thermalPaletteCycleRequested = true;
+    return;
+  }
+
+  if (!wasPressed &&
+      x >= 280 && x <= 319 &&
+      y >= 78 && y <= 102) {
+    thermalHotspotToggleRequested = true;
+    return;
+  }
+
+  if (!wasPressed &&
+      x >= 280 && x <= 319 &&
+      y >= 104 && y <= 128) {
+    thermalThresholdCycleRequested = true;
+    return;
+  }
+
   const int barX = 300;
   const int barY = 35;
   const int barW = 10;
@@ -154,10 +209,17 @@ void TFTUI::setTouchPoint(int x, int y, bool pressed) {
     tx = clampf(tx, 0.0f, (float)(THERMAL_W - 1));
     ty = clampf(ty, 0.0f, (float)(THERMAL_H - 1));
 
-    pendingThermalX = (int)(tx + 0.5f);
-    pendingThermalY = (int)(ty + 0.5f);
+    int newPX = (int)tx;
+    int newPY = (int)ty;
+    if (pendingThermalX < 0 || pendingThermalY < 0 ||
+        abs(newPX - pendingThermalX) >= 1 || abs(newPY - pendingThermalY) >= 1) {
+      pendingThermalX = newPX;
+      pendingThermalY = newPY;
+    }
     pendingThermalCenterX = tx;
     pendingThermalCenterY = ty;
+    thermalHotspotLockX = newPX;
+    thermalHotspotLockY = newPY;
   }
 }
 
@@ -170,6 +232,34 @@ bool TFTUI::consumeThermalRangeToggleRequest() {
 bool TFTUI::consumeThermalZoomCycleRequest() {
   bool requested = thermalZoomCycleRequested;
   thermalZoomCycleRequested = false;
+  return requested;
+}
+
+bool TFTUI::consumeThermalPaletteCycleRequest() {
+  bool requested = thermalPaletteCycleRequested;
+  thermalPaletteCycleRequested = false;
+  return requested;
+}
+
+bool TFTUI::consumeThermalHotspotToggleRequest() {
+  bool requested = thermalHotspotToggleRequested;
+  thermalHotspotToggleRequested = false;
+  return requested;
+}
+
+bool TFTUI::consumeThermalHotspotLockHereRequest(int& x, int& y) {
+  if (thermalHotspotLockX < 0 || thermalHotspotLockY < 0) return false;
+
+  x = thermalHotspotLockX;
+  y = thermalHotspotLockY;
+  thermalHotspotLockX = -1;
+  thermalHotspotLockY = -1;
+  return true;
+}
+
+bool TFTUI::consumeThermalThresholdCycleRequest() {
+  bool requested = thermalThresholdCycleRequested;
+  thermalThresholdCycleRequested = false;
   return requested;
 }
 
@@ -446,12 +536,23 @@ void TFTUI::drawThermalPage(const LiveData& live) {
     return;
   }
 
-  float drawMinF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_AUTO)
+  float imageMinF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_AUTO)
     ? live.thermal.minF
     : live.thermalDisplay.fixedMinF;
-  float drawMaxF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_AUTO)
+  float imageMaxF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_AUTO)
     ? live.thermal.maxF
     : live.thermalDisplay.fixedMaxF;
+  float scaleMinF = live.thermal.minF;
+  float scaleMaxF = live.thermal.maxF;
+
+  int effectiveHotX = live.thermal.hotspotX;
+  int effectiveHotY = live.thermal.hotspotY;
+  float effectiveHotF = live.thermal.hotspotF;
+  if (live.thermalDisplay.hotspotMode == THERMAL_HOTSPOT_LOCKED) {
+    effectiveHotX = live.thermalDisplay.lockedHotspotX;
+    effectiveHotY = live.thermalDisplay.lockedHotspotY;
+    effectiveHotF = live.thermalDisplay.lockedHotspotF;
+  }
 
   float x0 = 0.0f;
   float y0 = 0.0f;
@@ -465,19 +566,36 @@ void TFTUI::drawThermalPage(const LiveData& live) {
       float sy = y0 + (float)dy * (cropH - 1.0f) / (THERMAL_DRAW_H_TFT - 1);
 
       float v = bilinearSampleF(live.thermal.pixelsF, THERMAL_W, THERMAL_H, sx, sy);
-      uint16_t color = thermalColor565(v, drawMinF, drawMaxF);
+      uint16_t color = thermalColor565(v, imageMinF, imageMaxF, live.thermalDisplay.palette);
+      bool aboveThreshold = (live.thermalDisplay.thresholdMode == THERMAL_THRESHOLD_ABOVE &&
+                             v >= live.thermalDisplay.thresholdF);
       int px = imgX + dx * imgW / THERMAL_DRAW_W_TFT;
       int py = imgY + dy * imgH / THERMAL_DRAW_H_TFT;
       int pw = max(1, imgW / THERMAL_DRAW_W_TFT + 1);
       int ph = max(1, imgH / THERMAL_DRAW_H_TFT + 1);
       tft.fillRect(px, py, pw, ph, color);
+      if (aboveThreshold && pw >= 2 && ph >= 2) {
+        tft.drawPixel(px, py, ILI9341_YELLOW);
+      }
     }
   }
 
   tft.drawRect(imgX - 1, imgY - 1, imgW + 2, imgH + 2, ILI9341_WHITE);
 
-  int hx = imgX + (int)(((live.thermal.hotspotX - x0) / max(0.001f, cropW - 1.0f)) * imgW);
-  int hy = imgY + (int)(((live.thermal.hotspotY - y0) / max(0.001f, cropH - 1.0f)) * imgH);
+  if (live.thermal.thresholdRegion.valid) {
+    int bx0 = imgX + (int)(((live.thermal.thresholdRegion.minX - x0) / max(0.001f, cropW - 1.0f)) * imgW);
+    int by0 = imgY + (int)(((live.thermal.thresholdRegion.minY - y0) / max(0.001f, cropH - 1.0f)) * imgH);
+    int bx1 = imgX + (int)(((live.thermal.thresholdRegion.maxX - x0) / max(0.001f, cropW - 1.0f)) * imgW);
+    int by1 = imgY + (int)(((live.thermal.thresholdRegion.maxY - y0) / max(0.001f, cropH - 1.0f)) * imgH);
+    int bw = bx1 - bx0;
+    int bh = by1 - by0;
+    if (bw > 0 && bh > 0) {
+      tft.drawRect(bx0, by0, bw, bh, ILI9341_YELLOW);
+    }
+  }
+
+  int hx = imgX + (int)(((effectiveHotX - x0) / max(0.001f, cropW - 1.0f)) * imgW);
+  int hy = imgY + (int)(((effectiveHotY - y0) / max(0.001f, cropH - 1.0f)) * imgH);
   if (hx >= imgX && hx < imgX + imgW && hy >= imgY && hy < imgY + imgH) {
     tft.drawLine(hx - 6, hy, hx + 6, hy, ILI9341_RED);
     tft.drawLine(hx, hy - 6, hx, hy + 6, ILI9341_RED);
@@ -496,16 +614,16 @@ void TFTUI::drawThermalPage(const LiveData& live) {
 
   int tx = 240;
   tft.setCursor(tx, 35);  tft.print("Hot:");
-  tft.setCursor(tx, 48);  tft.print(live.thermal.hotspotF, 1); tft.print("F");
+  tft.setCursor(tx, 48);  tft.print(effectiveHotF, 1); tft.print("F");
 
   tft.setCursor(tx, 72);  tft.print("Ptr:");
-  tft.setCursor(tx, 85);  tft.print(live.thermal.pointerF, 1); tft.print("F");
+  tft.setCursor(tx, 85);  tft.print(live.thermal.pointerDisplayF, 1); tft.print("F");
 
   tft.setCursor(tx, 109); tft.print("Min:");
-  tft.setCursor(tx, 122); tft.print(drawMinF, 1);
+  tft.setCursor(tx, 122); tft.print(imageMinF, 1);
 
   tft.setCursor(tx, 146); tft.print("Max:");
-  tft.setCursor(tx, 159); tft.print(drawMaxF, 1);
+  tft.setCursor(tx, 159); tft.print(imageMaxF, 1);
 
   tft.setCursor(tx, 183); tft.print("XY:");
   tft.print(live.thermal.pointerX);
@@ -517,21 +635,58 @@ void TFTUI::drawThermalPage(const LiveData& live) {
   tft.print(",");
   tft.print((int)live.thermalDisplay.centerY);
 
+  if (live.thermal.thresholdRegion.valid) {
+    tft.setCursor(tx, 208); tft.print("HP:");
+    tft.print(live.thermal.thresholdRegion.pixelCount);
+    tft.setCursor(tx, 220); tft.print("A:");
+    tft.print(live.thermal.thresholdRegion.percentOfFrame, 0);
+    tft.print("%");
+    tft.setCursor(tx, 232); tft.print("Av:");
+    tft.print(live.thermal.thresholdRegion.avgF, 0);
+  }
+
   const int barX = 300;
   const int barY = 35;
   const int barW = 10;
   const int barH = 150;
 
   for (int i = 0; i < barH; i++) {
-    float f = drawMaxF - (float)i * (drawMaxF - drawMinF) / (barH - 1);
-    tft.drawFastHLine(barX, barY + i, barW, thermalColor565(f, drawMinF, drawMaxF));
+    float f = scaleMaxF - (float)i * (scaleMaxF - scaleMinF) / (barH - 1);
+    tft.drawFastHLine(barX, barY + i, barW, thermalColor565(f, scaleMinF, scaleMaxF, live.thermalDisplay.palette));
   }
   tft.drawRect(barX - 1, barY - 1, barW + 2, barH + 2, ILI9341_WHITE);
 
+  tft.setCursor(barX - 4, barY - 18);
+  tft.print("F");
+
+  if (live.thermalDisplay.thresholdMode == THERMAL_THRESHOLD_ABOVE) {
+    float thresholdF = live.thermalDisplay.thresholdF;
+    int thrBarY = barY + (int)(((scaleMaxF - thresholdF) / max(0.001f, scaleMaxF - scaleMinF)) * barH);
+    if (thrBarY >= barY && thrBarY <= barY + barH) {
+      tft.drawFastHLine(barX - 4, thrBarY, barW + 8, ILI9341_YELLOW);
+      tft.setCursor(barX + 18, thrBarY - 4);
+      tft.setTextColor(ILI9341_YELLOW);
+      tft.print("T");
+      tft.setTextColor(ILI9341_WHITE);
+    }
+  }
+
+  int hotBarY = barY + (int)(((scaleMaxF - effectiveHotF) / max(0.001f, scaleMaxF - scaleMinF)) * barH);
+  if (hotBarY >= barY && hotBarY <= barY + barH) {
+    tft.fillTriangle(barX + barW + 8, hotBarY, barX + barW + 1, hotBarY - 4, barX + barW + 1, hotBarY + 4, ILI9341_RED);
+    tft.drawFastHLine(barX - 1, hotBarY, barW + 2, ILI9341_RED);
+  }
+
+  int ptrBarY = barY + (int)(((scaleMaxF - live.thermal.pointerDisplayF) / max(0.001f, scaleMaxF - scaleMinF)) * barH);
+  if (ptrBarY >= barY && ptrBarY <= barY + barH) {
+    tft.fillTriangle(barX - 8, ptrBarY, barX - 1, ptrBarY - 4, barX - 1, ptrBarY + 4, ILI9341_WHITE);
+    tft.drawFastHLine(barX - 1, ptrBarY, barW + 2, ILI9341_WHITE);
+  }
+
   tft.setCursor(barX - 8, barY - 10);
-  tft.print((int)drawMaxF);
+  tft.print((int)scaleMaxF);
   tft.setCursor(barX - 8, barY + barH + 4);
-  tft.print((int)drawMinF);
+  tft.print((int)scaleMinF);
 
   tft.setCursor(240, 210);
   tft.print("Mode:");
@@ -543,10 +698,43 @@ void TFTUI::drawThermalPage(const LiveData& live) {
   tft.setCursor(292, 33);
   tft.print("Z");
 
+  tft.fillRect(285, 52, 28, 18, ILI9341_BLACK);
+  tft.drawRect(285, 52, 28, 18, ILI9341_WHITE);
+  tft.setCursor(289, 57);
+  tft.print("P");
+
+  tft.fillRect(285, 78, 28, 18, ILI9341_BLACK);
+  tft.drawRect(285, 78, 28, 18, ILI9341_WHITE);
+  tft.setCursor(289, 83);
+  tft.print("H");
+
+  tft.fillRect(285, 104, 28, 18, ILI9341_BLACK);
+  tft.drawRect(285, 104, 28, 18, ILI9341_WHITE);
+  tft.setCursor(289, 109);
+  tft.print("T");
+
   tft.setCursor(240, 236);
   tft.print("Z:");
   tft.print(live.thermalDisplay.zoom, 1);
   tft.print("x");
+
+  tft.setCursor(240, 248);
+  switch (live.thermalDisplay.palette) {
+    case THERMAL_PALETTE_RAINBOW: tft.print("RBOW"); break;
+    case THERMAL_PALETTE_GRAYSCALE: tft.print("GRAY"); break;
+    default: tft.print("IRON"); break;
+  }
+
+  tft.setCursor(240, 260);
+  tft.print(live.thermalDisplay.hotspotMode == THERMAL_HOTSPOT_AUTO ? "HAUTO" : "HLOCK");
+
+  tft.setCursor(240, 272);
+  if (live.thermalDisplay.thresholdMode == THERMAL_THRESHOLD_OFF) {
+    tft.print("THR OFF");
+  } else {
+    tft.print("THR ");
+    tft.print(live.thermalDisplay.thresholdF, 0);
+  }
 }
 
 void TFTUI::updateSound(const LiveData& live) {

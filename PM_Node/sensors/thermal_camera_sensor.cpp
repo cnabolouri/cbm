@@ -97,5 +97,15 @@ bool ThermalCameraSensor::update(ThermalFrameData& out) {
   out.pointerY = clampi(pointerY, 0, THERMAL_H - 1);
   out.pointerF = out.pixelsF[out.pointerY * THERMAL_W + out.pointerX];
 
+  static bool havePointerSmooth = false;
+  static float smoothPointerF = 0.0f;
+  if (!havePointerSmooth) {
+    smoothPointerF = out.pointerF;
+    havePointerSmooth = true;
+  } else {
+    smoothPointerF = smoothPointerF * 0.65f + out.pointerF * 0.35f;
+  }
+  out.pointerDisplayF = smoothPointerF;
+
   return true;
 }

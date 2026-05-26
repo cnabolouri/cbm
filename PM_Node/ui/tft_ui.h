@@ -19,6 +19,10 @@ public:
   void setTouchPoint(int x, int y, bool pressed);
   bool consumeThermalRangeToggleRequest();
   bool consumeThermalZoomCycleRequest();
+  bool consumeThermalPaletteCycleRequest();
+  bool consumeThermalHotspotToggleRequest();
+  bool consumeThermalHotspotLockHereRequest(int& x, int& y);
+  bool consumeThermalThresholdCycleRequest();
   void render(const LiveData& live, int touchX, int touchY);
 
 private:
@@ -65,6 +69,11 @@ private:
   float pendingThermalCenterY = -1.0f;
   bool thermalRangeToggleRequested = false;
   bool thermalZoomCycleRequested = false;
+  bool thermalPaletteCycleRequested = false;
+  bool thermalHotspotToggleRequested = false;
+  bool thermalThresholdCycleRequested = false;
+  int thermalHotspotLockX = -1;
+  int thermalHotspotLockY = -1;
   ThermalDisplayState lastThermalDisplay;
 
   static const int HISTORY_LEN = 140;

@@ -20,6 +20,9 @@ public:
   void setThermalRangeRefs(ThermalRangeMode* modePtr, float* minPtr, float* maxPtr);
   void setThermalZoomRef(float* zoomPtr);
   void setThermalCenterRefs(float* cxPtr, float* cyPtr);
+  void setThermalPaletteRef(ThermalPalette* palettePtr);
+  void setThermalHotspotRefs(ThermalHotspotMode* modePtr, int* xPtr, int* yPtr);
+  void setThermalThresholdRefs(ThermalThresholdMode* modePtr, float* thresholdPtr);
   void setThermalPointerCallback(std::function<void(int,int)> cb);
 
 private:
@@ -53,6 +56,10 @@ private:
   void handleSetThermalRangeMode();
   void handleSetThermalZoom();
   void handleSetThermalCenter();
+  void handleSetThermalPalette();
+  void handleSetThermalHotspotMode();
+  void handleSetThermalHotspotPoint();
+  void handleSetThermalThreshold();
   void handleSetThermalPointer();
   void handleStatusJson();
   void handleLiveJson();
@@ -79,5 +86,11 @@ private:
   float* thermalZoomPtr = nullptr;
   float* thermalCenterXPtr = nullptr;
   float* thermalCenterYPtr = nullptr;
+  ThermalPalette* thermalPalettePtr = nullptr;
+  ThermalHotspotMode* thermalHotspotModePtr = nullptr;
+  int* thermalHotspotXPtr = nullptr;
+  int* thermalHotspotYPtr = nullptr;
+  ThermalThresholdMode* thermalThresholdModePtr = nullptr;
+  float* thermalThresholdFPtr = nullptr;
   std::function<void(int,int)> thermalPointerSetter;
 };

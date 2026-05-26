@@ -49,6 +49,18 @@ struct TemperatureData {
   float deltaF = 0.0f;
 };
 
+struct ThermalRegionStats {
+  bool valid = false;
+  int pixelCount = 0;
+  float percentOfFrame = 0.0f;
+  float avgF = 0.0f;
+  float maxF = 0.0f;
+  int minX = 0;
+  int minY = 0;
+  int maxX = 0;
+  int maxY = 0;
+};
+
 struct ThermalFrameData {
   static const int RAW_W = 32;
   static const int RAW_H = 24;
@@ -68,15 +80,33 @@ struct ThermalFrameData {
   float centerF = 0.0f;
 
   float pointerF = 0.0f;
+  float pointerDisplayF = 0.0f;
   int pointerX = RAW_W / 2;
   int pointerY = RAW_H / 2;
 
   float ambientF = 0.0f;
+  ThermalRegionStats thresholdRegion;
 };
 
 enum ThermalRangeMode {
   THERMAL_RANGE_AUTO = 0,
   THERMAL_RANGE_FIXED = 1
+};
+
+enum ThermalPalette {
+  THERMAL_PALETTE_IRON = 0,
+  THERMAL_PALETTE_RAINBOW = 1,
+  THERMAL_PALETTE_GRAYSCALE = 2
+};
+
+enum ThermalHotspotMode {
+  THERMAL_HOTSPOT_AUTO = 0,
+  THERMAL_HOTSPOT_LOCKED = 1
+};
+
+enum ThermalThresholdMode {
+  THERMAL_THRESHOLD_OFF = 0,
+  THERMAL_THRESHOLD_ABOVE = 1
 };
 
 struct ThermalDisplayState {
@@ -86,6 +116,13 @@ struct ThermalDisplayState {
   float zoom = 1.0f;
   float centerX = (THERMAL_W - 1) * 0.5f;
   float centerY = (THERMAL_H - 1) * 0.5f;
+  ThermalPalette palette = THERMAL_PALETTE_IRON;
+  ThermalHotspotMode hotspotMode = THERMAL_HOTSPOT_AUTO;
+  int lockedHotspotX = 0;
+  int lockedHotspotY = 0;
+  float lockedHotspotF = 0.0f;
+  ThermalThresholdMode thresholdMode = THERMAL_THRESHOLD_OFF;
+  float thresholdF = 100.0f;
 };
 
 struct SoundData {

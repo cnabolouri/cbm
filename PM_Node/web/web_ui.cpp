@@ -67,6 +67,21 @@ void WebUI::setThermalCenterRefs(float* cxPtr, float* cyPtr) {
   thermalCenterYPtr = cyPtr;
 }
 
+void WebUI::setThermalPaletteRef(ThermalPalette* palettePtr) {
+  thermalPalettePtr = palettePtr;
+}
+
+void WebUI::setThermalHotspotRefs(ThermalHotspotMode* modePtr, int* xPtr, int* yPtr) {
+  thermalHotspotModePtr = modePtr;
+  thermalHotspotXPtr = xPtr;
+  thermalHotspotYPtr = yPtr;
+}
+
+void WebUI::setThermalThresholdRefs(ThermalThresholdMode* modePtr, float* thresholdPtr) {
+  thermalThresholdModePtr = modePtr;
+  thermalThresholdFPtr = thresholdPtr;
+}
+
 void WebUI::setThermalPointerCallback(std::function<void(int,int)> cb) {
   thermalPointerSetter = cb;
 }
@@ -142,6 +157,10 @@ void WebUI::initRoutes() {
   server.on("/set_thermal_range_mode", HTTP_GET, [this]() { handleSetThermalRangeMode(); });
   server.on("/set_thermal_zoom", HTTP_GET, [this]() { handleSetThermalZoom(); });
   server.on("/set_thermal_center", HTTP_GET, [this]() { handleSetThermalCenter(); });
+  server.on("/set_thermal_palette", HTTP_GET, [this]() { handleSetThermalPalette(); });
+  server.on("/set_thermal_hotspot_mode", HTTP_GET, [this]() { handleSetThermalHotspotMode(); });
+  server.on("/set_thermal_hotspot_point", HTTP_GET, [this]() { handleSetThermalHotspotPoint(); });
+  server.on("/set_thermal_threshold", HTTP_GET, [this]() { handleSetThermalThreshold(); });
   server.on("/set_thermal_pointer", HTTP_GET, [this]() { handleSetThermalPointer(); });
   server.on("/api/status", HTTP_GET, [this]() { handleStatusJson(); });
   server.on("/api/live", HTTP_GET, [this]() { handleLiveJson(); });
@@ -444,11 +463,20 @@ void WebUI::handleLiveThermalPage() {
   s += "<div class='card'><div class='grid'>";
   s += "<div class='metric'><b>Hotspot</b><br><span id='hotF'>-</span></div>";
   s += "<div class='metric'><b>Pointer</b><br><span id='ptrF'>-</span></div>";
+  s += "<div class='metric'><b>Pointer XY</b><br><span id='ptrXY'>-</span></div>";
   s += "<div class='metric'><b>Range</b><br><span id='rngF'>-</span></div>";
   s += "<div class='metric'><b>Hotspot XY</b><br><span id='hotXY'>-</span></div>";
   s += "<div class='metric'><b>Mode</b><br><span id='rangeMode'>-</span></div>";
   s += "<div class='metric'><b>Zoom</b><br><span id='zoomMode'>-</span></div>";
   s += "<div class='metric'><b>Center</b><br><span id='centerXY'>-</span></div>";
+  s += "<div class='metric'><b>Palette</b><br><span id='paletteName'>-</span></div>";
+  s += "<div class='metric'><b>Hotspot Mode</b><br><span id='hotMode'>-</span></div>";
+  s += "<div class='metric'><b>Threshold</b><br><span id='thrMode'>-</span></div>";
+  s += "<div class='metric'><b>Hot Pixels</b><br><span id='thrPixels'>-</span></div>";
+  s += "<div class='metric'><b>Hot Area %</b><br><span id='thrPct'>-</span></div>";
+  s += "<div class='metric'><b>Hot Avg</b><br><span id='thrAvg'>-</span></div>";
+  s += "<div class='metric'><b>Hot Max</b><br><span id='thrMax'>-</span></div>";
+  s += "<div class='metric'><b>Hot Box</b><br><span id='thrBox'>-</span></div>";
   s += "</div></div>";
 
   s += "<div class='card'><h2>Thermal Range Control</h2>";
@@ -465,24 +493,44 @@ void WebUI::handleLiveThermalPage() {
   s += "<div class='muted' style='margin-top:8px;'>Click the thermal image to center the zoom view.</div>";
   s += "</div>";
 
+  s += "<div class='card'><h2>Palette</h2>";
+  s += "<a class='btn' href='/set_thermal_palette?p=iron'>Iron</a> ";
+  s += "<a class='btn' href='/set_thermal_palette?p=rainbow'>Rainbow</a> ";
+  s += "<a class='btn' href='/set_thermal_palette?p=grayscale'>Grayscale</a>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Hotspot Mode</h2>";
+  s += "<a class='btn' href='/set_thermal_hotspot_mode?mode=auto'>Auto</a> ";
+  s += "<a class='btn' href='/set_thermal_hotspot_mode?mode=locked'>Locked</a>";
+  s += "<div class='muted' style='margin-top:8px;'>When locked, click the thermal image to move the hotspot lock point.</div>";
+  s += "</div>";
+
+  s += "<div class='card'><h2>Threshold Highlight</h2>";
+  s += "<a class='btn' href='/set_thermal_threshold?mode=off'>Off</a> ";
+  s += "<a class='btn' href='/set_thermal_threshold?mode=above&f=90'>90F+</a> ";
+  s += "<a class='btn' href='/set_thermal_threshold?mode=above&f=100'>100F+</a> ";
+  s += "<a class='btn' href='/set_thermal_threshold?mode=above&f=120'>120F+</a>";
+  s += "</div>";
+
   s += "<div class='card'><canvas id='thermalCanvas' width='640' height='480' style='max-width:100%;border:1px solid #333;'></canvas></div>";
 
   s += "<script>";
   s += "const canvas=document.getElementById('thermalCanvas');";
   s += "const ctx=canvas.getContext('2d');";
   s += "let lastFrame=null;";
+  s += "let pointerX=16,pointerY=12,pointerReady=false,lastPointerSendMs=0;";
   s += "function setText(id,v){document.getElementById(id).textContent=v;}";
-  s += "function colorMap(v,minV,maxV){let t=(v-minV)/Math.max(0.001,maxV-minV);if(t<0)t=0;if(t>1)t=1;const r=Math.floor(255*Math.min(1,Math.max(0,1.5*t)));const g=Math.floor(255*Math.min(1,Math.max(0,1.5*(1-Math.abs(t-0.5)*2))));const b=Math.floor(255*Math.min(1,Math.max(0,1.5*(1-t))));return `rgb(${r},${g},${b})`;}";
+  s += "function colorMap(v,minV,maxV,palette='iron'){let t=(v-minV)/Math.max(0.001,maxV-minV);if(t<0)t=0;if(t>1)t=1;let r=0,g=0,b=0;if(palette==='grayscale'){const vv=Math.floor(255*t);r=g=b=vv;}else if(palette==='rainbow'){if(t<0.25){let u=t/0.25;r=0;g=Math.floor(255*u);b=255;}else if(t<0.5){let u=(t-0.25)/0.25;r=0;g=255;b=Math.floor(255*(1-u));}else if(t<0.75){let u=(t-0.5)/0.25;r=Math.floor(255*u);g=255;b=0;}else{let u=(t-0.75)/0.25;r=255;g=Math.floor(255*(1-u));b=0;}}else{if(t<0.33){let u=t/0.33;r=Math.floor(80*u);g=0;b=Math.floor(40+100*u);}else if(t<0.66){let u=(t-0.33)/0.33;r=Math.floor(80+120*u);g=Math.floor(40*u);b=Math.floor(140*(1-u));}else{let u=(t-0.66)/0.34;r=255;g=Math.floor(60+195*u);b=Math.floor(20*(1-u));}}return `rgb(${r},${g},${b})`;}";
   s += "function bilinearSample(arr,w,h,x,y){const x0=Math.floor(x),y0=Math.floor(y);const x1=Math.min(w-1,x0+1),y1=Math.min(h-1,y0+1);const tx=x-x0,ty=y-y0;const q00=arr[y0*w+x0],q10=arr[y0*w+x1],q01=arr[y1*w+x0],q11=arr[y1*w+x1];const a=q00*(1-tx)+q10*tx;const b=q01*(1-tx)+q11*tx;return a*(1-ty)+b*ty;}";
   s += "function cropWindow(d){const zoom=d.zoom||1.0;const cropW=d.w/zoom,cropH=d.h/zoom;let x0=(d.centerX??((d.w-1)*0.5))-(cropW-1)*0.5;let y0=(d.centerY??((d.h-1)*0.5))-(cropH-1)*0.5;if(x0<0)x0=0;if(y0<0)y0=0;if(x0+cropW>d.w)x0=d.w-cropW;if(y0+cropH>d.h)y0=d.h-cropH;if(x0<0)x0=0;if(y0<0)y0=0;return{x0,y0,cropW,cropH};}";
   s += "function drawThermal(d){const drawW=";
   s += String(THERMAL_DRAW_W_WEB);
   s += ",drawH=";
   s += String(THERMAL_DRAW_H_WEB);
-  s += ";const cellW=canvas.width/drawW,cellH=canvas.height/drawH;ctx.clearRect(0,0,canvas.width,canvas.height);const minF=d.rangeMode==='auto'?d.minF:d.fixedMinF;const maxF=d.rangeMode==='auto'?d.maxF:d.fixedMaxF;const c=cropWindow(d);for(let yy=0;yy<drawH;yy++){for(let xx=0;xx<drawW;xx++){const sx=c.x0+(xx/(drawW-1))*(c.cropW-1);const sy=c.y0+(yy/(drawH-1))*(c.cropH-1);const v=bilinearSample(d.pixelsF,d.w,d.h,sx,sy);ctx.fillStyle=colorMap(v,minF,maxF);ctx.fillRect(xx*cellW,yy*cellH,cellW+1,cellH+1);}}const hx=((d.hotspotX-c.x0)/Math.max(0.001,c.cropW-1))*canvas.width;const hy=((d.hotspotY-c.y0)/Math.max(0.001,c.cropH-1))*canvas.height;if(hx>=0&&hx<=canvas.width&&hy>=0&&hy<=canvas.height){ctx.strokeStyle='red';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx-10,hy);ctx.lineTo(hx+10,hy);ctx.moveTo(hx,hy-10);ctx.lineTo(hx,hy+10);ctx.stroke();}const px=((d.pointerX-c.x0)/Math.max(0.001,c.cropW-1))*canvas.width;const py=((d.pointerY-c.y0)/Math.max(0.001,c.cropH-1))*canvas.height;if(px>=0&&px<=canvas.width&&py>=0&&py<=canvas.height){ctx.strokeStyle='white';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px-8,py);ctx.lineTo(px+8,py);ctx.moveTo(px,py-8);ctx.lineTo(px,py+8);ctx.stroke();}}";
-  s += "canvas.addEventListener('mousemove',async(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;const y=e.clientY-rect.top;const c=cropWindow(lastFrame);let tx=Math.round(c.x0+(x/rect.width)*(c.cropW-1));let ty=Math.round(c.y0+(y/rect.height)*(c.cropH-1));tx=Math.max(0,Math.min(lastFrame.w-1,tx));ty=Math.max(0,Math.min(lastFrame.h-1,ty));fetch(`/set_thermal_pointer?x=${tx}&y=${ty}`).catch(()=>{});});";
-  s += "canvas.addEventListener('click',async(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;const y=e.clientY-rect.top;const c=cropWindow(lastFrame);const tx=c.x0+(x/rect.width)*(c.cropW-1);const ty=c.y0+(y/rect.height)*(c.cropH-1);fetch(`/set_thermal_center?x=${tx.toFixed(2)}&y=${ty.toFixed(2)}`).catch(()=>{});});";
-  s += "async function poll(){try{const r=await fetch('/api/thermal_frame');const txt=await r.text();const d=JSON.parse(txt);if(!d.valid)return;lastFrame=d;const minF=d.rangeMode==='auto'?d.minF:d.fixedMinF;const maxF=d.rangeMode==='auto'?d.maxF:d.fixedMaxF;setText('hotF',d.hotspotF.toFixed(2)+' F');setText('ptrF',d.pointerF.toFixed(2)+' F');setText('rngF',minF.toFixed(1)+' - '+maxF.toFixed(1)+' F');setText('hotXY','('+d.hotspotX+','+d.hotspotY+')');setText('rangeMode',d.rangeMode==='auto'?'AUTO':('FIXED '+d.fixedMinF.toFixed(0)+'-'+d.fixedMaxF.toFixed(0)+' F'));setText('zoomMode',d.zoom.toFixed(1)+'x');setText('centerXY','('+d.centerX.toFixed(1)+','+d.centerY.toFixed(1)+')');drawThermal(d);}catch(err){console.error('Thermal fetch/parse error:',err);}}";
+  s += ";const canvasW=canvas.width,canvasH=canvas.height,scaleW=52,imgWpx=canvasW-scaleW-8,imgHpx=canvasH;const cellW=imgWpx/drawW,cellH=imgHpx/drawH;ctx.clearRect(0,0,canvasW,canvasH);const imageMinF=d.rangeMode==='auto'?d.minF:d.fixedMinF;const imageMaxF=d.rangeMode==='auto'?d.maxF:d.fixedMaxF;const scaleMinF=d.minF,scaleMaxF=d.maxF,palette=d.palette||'iron';const effectiveHotX=(d.hotspotMode==='locked')?d.lockedHotspotX:d.hotspotX;const effectiveHotY=(d.hotspotMode==='locked')?d.lockedHotspotY:d.hotspotY;const effectiveHotF=(d.hotspotMode==='locked')?d.lockedHotspotF:d.hotspotF;const c=cropWindow(d);for(let yy=0;yy<drawH;yy++){for(let xx=0;xx<drawW;xx++){const sx=c.x0+(xx/(drawW-1))*(c.cropW-1);const sy=c.y0+(yy/(drawH-1))*(c.cropH-1);const v=bilinearSample(d.pixelsF,d.w,d.h,sx,sy);ctx.fillStyle=colorMap(v,imageMinF,imageMaxF,palette);ctx.fillRect(xx*cellW,yy*cellH,cellW+1,cellH+1);}}if((d.thresholdMode||'off')==='above'){const thr=d.thresholdF||100.0;for(let yy=0;yy<drawH;yy++){for(let xx=0;xx<drawW;xx++){const sx=c.x0+(xx/(drawW-1))*(c.cropW-1);const sy=c.y0+(yy/(drawH-1))*(c.cropH-1);const v=bilinearSample(d.pixelsF,d.w,d.h,sx,sy);if(v>=thr){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.fillRect(xx*cellW,yy*cellH,cellW+1,cellH+1);}}}}if(d.thresholdRegion&&d.thresholdRegion.valid){const bx0=((d.thresholdRegion.minX-c.x0)/Math.max(0.001,c.cropW-1))*imgWpx;const by0=((d.thresholdRegion.minY-c.y0)/Math.max(0.001,c.cropH-1))*imgHpx;const bx1=((d.thresholdRegion.maxX-c.x0)/Math.max(0.001,c.cropW-1))*imgWpx;const by1=((d.thresholdRegion.maxY-c.y0)/Math.max(0.001,c.cropH-1))*imgHpx;if(bx1>=0&&by1>=0&&bx0<=imgWpx&&by0<=imgHpx){ctx.strokeStyle='yellow';ctx.lineWidth=2;ctx.strokeRect(bx0,by0,Math.max(1,bx1-bx0),Math.max(1,by1-by0));}}ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(0,0,imgWpx,imgHpx);const hx=((effectiveHotX-c.x0)/Math.max(0.001,c.cropW-1))*imgWpx;const hy=((effectiveHotY-c.y0)/Math.max(0.001,c.cropH-1))*imgHpx;if(hx>=0&&hx<=imgWpx&&hy>=0&&hy<=imgHpx){ctx.strokeStyle='red';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx-10,hy);ctx.lineTo(hx+10,hy);ctx.moveTo(hx,hy-10);ctx.lineTo(hx,hy+10);ctx.stroke();}const px=((pointerX-c.x0)/Math.max(0.001,c.cropW-1))*imgWpx;const py=((pointerY-c.y0)/Math.max(0.001,c.cropH-1))*imgHpx;if(px>=0&&px<=imgWpx&&py>=0&&py<=imgHpx){ctx.strokeStyle='white';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px-8,py);ctx.lineTo(px+8,py);ctx.moveTo(px,py-8);ctx.lineTo(px,py+8);ctx.stroke();}const scaleX=imgWpx+8,scaleY=10,scaleH=canvasH-20,barW=16;for(let i=0;i<scaleH;i++){const f=scaleMaxF-(i/Math.max(1,scaleH-1))*(scaleMaxF-scaleMinF);ctx.fillStyle=colorMap(f,scaleMinF,scaleMaxF,palette);ctx.fillRect(scaleX,scaleY+i,barW,1);}ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(scaleX-1,scaleY-1,barW+2,scaleH+2);ctx.fillStyle='#fff';ctx.font='12px Arial';ctx.fillText(scaleMaxF.toFixed(1)+'F',scaleX+22,scaleY+10);ctx.fillText(scaleMinF.toFixed(1)+'F',scaleX+22,scaleY+scaleH);if((d.thresholdMode||'off')==='above'){const thr=d.thresholdF||100.0;const thrY=scaleY+((scaleMaxF-thr)/Math.max(0.001,scaleMaxF-scaleMinF))*scaleH;if(thrY>=scaleY&&thrY<=scaleY+scaleH){ctx.strokeStyle='#ffff00';ctx.beginPath();ctx.moveTo(scaleX-8,thrY);ctx.lineTo(scaleX+barW+8,thrY);ctx.stroke();ctx.fillStyle='#ffff00';ctx.fillText('T',scaleX+24,thrY-4);}}const hotY=scaleY+((scaleMaxF-effectiveHotF)/Math.max(0.001,scaleMaxF-scaleMinF))*scaleH;if(hotY>=scaleY&&hotY<=scaleY+scaleH){ctx.fillStyle='red';ctx.beginPath();ctx.moveTo(scaleX+barW+8,hotY);ctx.lineTo(scaleX+barW+1,hotY-5);ctx.lineTo(scaleX+barW+1,hotY+5);ctx.closePath();ctx.fill();ctx.strokeStyle='red';ctx.beginPath();ctx.moveTo(scaleX-1,hotY);ctx.lineTo(scaleX+barW+2,hotY);ctx.stroke();ctx.fillText('H',scaleX+24,hotY-4);}const rawP=d.pixelsF[pointerY*d.w+pointerX];const pTemp=(typeof d.pointerDisplayF==='number'&&d.pointerX===pointerX&&d.pointerY===pointerY)?d.pointerDisplayF:rawP;const ptrY=scaleY+((scaleMaxF-pTemp)/Math.max(0.001,scaleMaxF-scaleMinF))*scaleH;if(ptrY>=scaleY&&ptrY<=scaleY+scaleH){ctx.fillStyle='white';ctx.beginPath();ctx.moveTo(scaleX-8,ptrY);ctx.lineTo(scaleX-1,ptrY-5);ctx.lineTo(scaleX-1,ptrY+5);ctx.closePath();ctx.fill();ctx.strokeStyle='white';ctx.beginPath();ctx.moveTo(scaleX-1,ptrY);ctx.lineTo(scaleX+barW+2,ptrY);ctx.stroke();ctx.fillText('P',scaleX+24,ptrY-4);}setText('hotF',effectiveHotF.toFixed(2)+' F');setText('ptrF',pTemp.toFixed(2)+' F');setText('ptrXY','('+pointerX+','+pointerY+')');setText('rngF',scaleMinF.toFixed(1)+' - '+scaleMaxF.toFixed(1)+' F');setText('hotXY','('+effectiveHotX+','+effectiveHotY+')');setText('rangeMode',d.rangeMode==='auto'?'AUTO':('FIXED '+d.fixedMinF.toFixed(0)+'-'+d.fixedMaxF.toFixed(0)+' F'));setText('zoomMode',(d.zoom||1.0).toFixed(1)+'x');setText('centerXY','('+d.centerX.toFixed(1)+','+d.centerY.toFixed(1)+')');setText('paletteName',palette.toUpperCase());setText('hotMode',(d.hotspotMode||'auto').toUpperCase());setText('thrMode',(d.thresholdMode||'off')==='off'?'OFF':('ABOVE '+d.thresholdF.toFixed(1)+' F'));if(d.thresholdRegion&&d.thresholdRegion.valid){setText('thrPixels',d.thresholdRegion.pixelCount.toString());setText('thrPct',d.thresholdRegion.percentOfFrame.toFixed(1)+'%');setText('thrAvg',d.thresholdRegion.avgF.toFixed(1)+' F');setText('thrMax',d.thresholdRegion.maxF.toFixed(1)+' F');setText('thrBox','('+d.thresholdRegion.minX+','+d.thresholdRegion.minY+')-('+d.thresholdRegion.maxX+','+d.thresholdRegion.maxY+')');}else{setText('thrPixels','0');setText('thrPct','0.0%');setText('thrAvg','-');setText('thrMax','-');setText('thrBox','-');}}";
+  s += "canvas.addEventListener('mousemove',(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=(e.clientX-rect.left)*canvas.width/rect.width;const y=(e.clientY-rect.top)*canvas.height/rect.height;const imgWpx=canvas.width-52-8;if(x>imgWpx)return;const c=cropWindow(lastFrame);pointerX=Math.round(c.x0+(x/imgWpx)*(c.cropW-1));pointerY=Math.round(c.y0+(y/canvas.height)*(c.cropH-1));pointerX=Math.max(0,Math.min(lastFrame.w-1,pointerX));pointerY=Math.max(0,Math.min(lastFrame.h-1,pointerY));drawThermal(lastFrame);const now=performance.now();if(now-lastPointerSendMs>120){lastPointerSendMs=now;fetch(`/set_thermal_pointer?x=${pointerX}&y=${pointerY}`).catch(()=>{});}});";
+  s += "canvas.addEventListener('click',async(e)=>{if(!lastFrame)return;const rect=canvas.getBoundingClientRect();const x=(e.clientX-rect.left)*canvas.width/rect.width;const y=(e.clientY-rect.top)*canvas.height/rect.height;const imgWpx=canvas.width-52-8;if(x>imgWpx)return;const c=cropWindow(lastFrame);const tx=c.x0+(x/imgWpx)*(c.cropW-1);const ty=c.y0+(y/canvas.height)*(c.cropH-1);fetch(`/set_thermal_center?x=${tx.toFixed(2)}&y=${ty.toFixed(2)}`).catch(()=>{});if((lastFrame.hotspotMode||'auto')==='locked'){fetch(`/set_thermal_hotspot_point?x=${tx.toFixed(0)}&y=${ty.toFixed(0)}`).catch(()=>{});}});";
+  s += "async function poll(){try{const r=await fetch('/api/thermal_frame');const txt=await r.text();const d=JSON.parse(txt);if(!d.valid)return;lastFrame=d;if(!pointerReady){pointerX=d.pointerX;pointerY=d.pointerY;pointerReady=true;}drawThermal(d);}catch(err){console.error('Thermal fetch/parse error:',err);}}";
   s += "setInterval(poll,400);poll();";
   s += "</script>";
 
@@ -864,6 +912,76 @@ void WebUI::handleSetThermalCenter() {
   server.send(200, "text/plain", "OK");
 }
 
+void WebUI::handleSetThermalPalette() {
+  if (!thermalPalettePtr || !server.hasArg("p")) {
+    server.send(400, "text/plain", "Missing palette");
+    return;
+  }
+
+  String p = server.arg("p");
+  if (p == "rainbow") *thermalPalettePtr = THERMAL_PALETTE_RAINBOW;
+  else if (p == "grayscale") *thermalPalettePtr = THERMAL_PALETTE_GRAYSCALE;
+  else *thermalPalettePtr = THERMAL_PALETTE_IRON;
+
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
+void WebUI::handleSetThermalHotspotMode() {
+  if (!thermalHotspotModePtr || !server.hasArg("mode")) {
+    server.send(400, "text/plain", "Missing mode");
+    return;
+  }
+
+  String mode = server.arg("mode");
+  if (mode == "locked") *thermalHotspotModePtr = THERMAL_HOTSPOT_LOCKED;
+  else *thermalHotspotModePtr = THERMAL_HOTSPOT_AUTO;
+
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
+void WebUI::handleSetThermalHotspotPoint() {
+  if (!thermalHotspotXPtr || !thermalHotspotYPtr || !server.hasArg("x") || !server.hasArg("y")) {
+    server.send(400, "text/plain", "Missing x/y");
+    return;
+  }
+
+  int x = server.arg("x").toInt();
+  int y = server.arg("y").toInt();
+
+  if (x < 0) x = 0;
+  if (x >= THERMAL_W) x = THERMAL_W - 1;
+  if (y < 0) y = 0;
+  if (y >= THERMAL_H) y = THERMAL_H - 1;
+
+  *thermalHotspotXPtr = x;
+  *thermalHotspotYPtr = y;
+
+  server.send(200, "text/plain", "OK");
+}
+
+void WebUI::handleSetThermalThreshold() {
+  if (!thermalThresholdModePtr || !thermalThresholdFPtr || !server.hasArg("mode")) {
+    server.send(400, "text/plain", "Missing threshold args");
+    return;
+  }
+
+  String mode = server.arg("mode");
+  if (mode == "off") {
+    *thermalThresholdModePtr = THERMAL_THRESHOLD_OFF;
+  } else {
+    *thermalThresholdModePtr = THERMAL_THRESHOLD_ABOVE;
+  }
+
+  if (server.hasArg("f")) {
+    *thermalThresholdFPtr = server.arg("f").toFloat();
+  }
+
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
 void WebUI::handleSetThermalPointer() {
   if (!server.hasArg("x") || !server.hasArg("y")) {
     server.send(400, "text/plain", "Missing x/y");
@@ -982,16 +1100,47 @@ void WebUI::handleThermalFrameJson() {
   s += "\"zoom\":" + String(live.thermalDisplay.zoom, 1) + ",";
   s += "\"centerX\":" + String(live.thermalDisplay.centerX, 2) + ",";
   s += "\"centerY\":" + String(live.thermalDisplay.centerY, 2) + ",";
+  s += "\"palette\":\"";
+  switch (live.thermalDisplay.palette) {
+    case THERMAL_PALETTE_RAINBOW: s += "rainbow"; break;
+    case THERMAL_PALETTE_GRAYSCALE: s += "grayscale"; break;
+    default: s += "iron"; break;
+  }
+  s += "\",";
+  s += "\"hotspotMode\":\"";
+  s += (live.thermalDisplay.hotspotMode == THERMAL_HOTSPOT_AUTO) ? "auto" : "locked";
+  s += "\",";
+  s += "\"lockedHotspotX\":" + String(live.thermalDisplay.lockedHotspotX) + ",";
+  s += "\"lockedHotspotY\":" + String(live.thermalDisplay.lockedHotspotY) + ",";
+  s += "\"lockedHotspotF\":" + String(isfinite(live.thermalDisplay.lockedHotspotF) ? live.thermalDisplay.lockedHotspotF : 0.0f, 2) + ",";
+  s += "\"thresholdMode\":\"";
+  s += (live.thermalDisplay.thresholdMode == THERMAL_THRESHOLD_OFF) ? "off" : "above";
+  s += "\",";
+  s += "\"thresholdF\":" + String(live.thermalDisplay.thresholdF, 2) + ",";
   s += "\"minF\":" + String(isfinite(live.thermal.minF) ? live.thermal.minF : 0.0f, 2) + ",";
   s += "\"maxF\":" + String(isfinite(live.thermal.maxF) ? live.thermal.maxF : 0.0f, 2) + ",";
   s += "\"hotspotF\":" + String(isfinite(live.thermal.hotspotF) ? live.thermal.hotspotF : 0.0f, 2) + ",";
   s += "\"hotspotX\":" + String(live.thermal.hotspotX) + ",";
   s += "\"hotspotY\":" + String(live.thermal.hotspotY) + ",";
   s += "\"pointerF\":" + String(isfinite(live.thermal.pointerF) ? live.thermal.pointerF : 0.0f, 2) + ",";
+  s += "\"pointerDisplayF\":" + String(isfinite(live.thermal.pointerDisplayF) ? live.thermal.pointerDisplayF : 0.0f, 2) + ",";
   s += "\"pointerX\":" + String(live.thermal.pointerX) + ",";
   s += "\"pointerY\":" + String(live.thermal.pointerY) + ",";
   s += "\"centerF\":" + String(isfinite(live.thermal.centerF) ? live.thermal.centerF : 0.0f, 2) + ",";
   s += "\"ambientF\":" + String(isfinite(live.thermal.ambientF) ? live.thermal.ambientF : 0.0f, 2) + ",";
+  s += "\"thresholdRegion\":{";
+  s += "\"valid\":";
+  s += live.thermal.thresholdRegion.valid ? "true" : "false";
+  s += ",";
+  s += "\"pixelCount\":" + String(live.thermal.thresholdRegion.pixelCount) + ",";
+  s += "\"percentOfFrame\":" + String(isfinite(live.thermal.thresholdRegion.percentOfFrame) ? live.thermal.thresholdRegion.percentOfFrame : 0.0f, 2) + ",";
+  s += "\"avgF\":" + String(isfinite(live.thermal.thresholdRegion.avgF) ? live.thermal.thresholdRegion.avgF : 0.0f, 2) + ",";
+  s += "\"maxF\":" + String(isfinite(live.thermal.thresholdRegion.maxF) ? live.thermal.thresholdRegion.maxF : 0.0f, 2) + ",";
+  s += "\"minX\":" + String(live.thermal.thresholdRegion.minX) + ",";
+  s += "\"minY\":" + String(live.thermal.thresholdRegion.minY) + ",";
+  s += "\"maxX\":" + String(live.thermal.thresholdRegion.maxX) + ",";
+  s += "\"maxY\":" + String(live.thermal.thresholdRegion.maxY);
+  s += "},";
   s += "\"pixelsF\":[";
   for (int i = 0; i < THERMAL_PIXELS; i++) {
     if (i) s += ",";
