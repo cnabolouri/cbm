@@ -63,9 +63,12 @@ void FFTAnalyzer::computeSoundSpectrum(const int32_t* samples, int count, float 
   int usableBins = count / 2;
   if (usableBins > SoundSpectrumData::MAX_BINS) usableBins = SoundSpectrumData::MAX_BINS;
   out.bins = usableBins;
+  out.sampleRateHz = sampleRate;
 
   float totalWeightedMag = 0.0f;
   float totalMag = 0.0f;
+  float bestAmp = 0.0f;
+  float bestHz = 0.0f;
 
   for (int k = 1; k < usableBins; k++) {
     float real = 0.0f;
@@ -83,9 +86,9 @@ void FFTAnalyzer::computeSoundSpectrum(const int32_t* samples, int count, float 
     out.hz[k] = hz;
     out.mag[k] = mag;
 
-    if (mag > out.dominantMag) {
-      out.dominantMag = mag;
-      out.dominantHz = hz;
+    if (k >= 3 && k <= 80 && mag > bestAmp) {
+      bestAmp = mag;
+      bestHz = hz;
     }
 
     if (hz < 1000.0f) out.lowBand += mag;
@@ -101,6 +104,20 @@ void FFTAnalyzer::computeSoundSpectrum(const int32_t* samples, int count, float 
   }
 
   pickTopPeaks(out.hz, out.mag, out.bins, out.peaks, out.harmonic2, out.harmonic3);
+
+  static bool havePeak = false;
+  static float smoothPeakHz = 0.0f;
+  if (!havePeak) {
+    smoothPeakHz = bestHz;
+    havePeak = true;
+  } else {
+    smoothPeakHz = smoothPeakHz * 0.75f + bestHz * 0.25f;
+  }
+
+  out.dominantHz = smoothPeakHz;
+  out.dominantMag = bestAmp;
+  out.dominantAmp = bestAmp;
+  out.valid = true;
 
   if (out.dominantMag <= 0.0f) {
     out.character = "Quiet";

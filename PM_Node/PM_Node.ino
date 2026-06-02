@@ -1,13 +1,10 @@
 #include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_ILI9341.h>
-#include <XPT2046_Touchscreen.h>
-
 #include "config.h"
 #include "types.h"
 
-#include "sensors/adxl357.h"
-#include "sensors/temperature.h"
+#include "input/joystick_input.h"
+#include "sensors/vibration_sensor.h"
+#include "sensors/temperature_sensor.h"
 #include "sensors/thermal_camera_sensor.h"
 #include "sensors/microphone.h"
 
@@ -22,16 +19,11 @@
 #include "analysis/vibration_fft.h"
 #include "analysis/mount_detector.h"
 
-#include "input/button.h"
-#include "input/touch.h"
-
 #include "ui/tft_ui.h"
 
 // =====================================================
 // GLOBAL HARDWARE OBJECTS
 // =====================================================
-Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
-XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
 
 // =====================================================
 // GLOBAL APP OBJECTS
@@ -47,32 +39,13 @@ VibrationFFT vibrationFFT;
 VibrationAxis selectedVibrationFFTaxis = VIB_AXIS_X;
 MountDetector mountDetector;
 
-ADXL357Sensor vibrationSensor;
+JoystickInput joystickInput;
+VibrationSensor vibrationSensor;
 TemperatureSensor temperatureSensor;
 ThermalCameraSensor thermalCameraSensor;
 MicrophoneSensor microphoneSensor;
 
-ButtonInput button(
-  BUTTON_PIN,
-  BUTTON_DEBOUNCE_MS,
-  SHORT_PRESS_MS,
-  LONG_PRESS_MS
-);
-
-TouchInput touch(
-  ts,
-  TFT_W,
-  TFT_H,
-  TS_MINX,
-  TS_MAXX,
-  TS_MINY,
-  TS_MAXY,
-  TOUCH_SWAP_XY,
-  TOUCH_INVERT_X,
-  TOUCH_INVERT_Y
-);
-
-TFTUI tftUI(tft);
+TFTUI tftUI;
 
 // =====================================================
 // TIMING
@@ -94,6 +67,8 @@ float thermalZoom = 1.0f;
 float thermalCenterX = (THERMAL_W - 1) * 0.5f;
 float thermalCenterY = (THERMAL_H - 1) * 0.5f;
 ThermalPalette thermalPalette = THERMAL_PALETTE_IRON;
+unsigned long lastTelemetryMs = 0;
+static const unsigned long TELEMETRY_INTERVAL_MS = 250;
 ThermalHotspotMode thermalHotspotMode = THERMAL_HOTSPOT_AUTO;
 int thermalLockedHotspotX = 0;
 int thermalLockedHotspotY = 0;
@@ -118,6 +93,25 @@ void syncThermalDisplayState() {
   live.thermalDisplay.lockedHotspotF = thermalLockedHotspotF;
   live.thermalDisplay.thresholdMode = thermalThresholdMode;
   live.thermalDisplay.thresholdF = thermalThresholdF;
+}
+
+void printTelemetry() {
+  Serial.print("VIB vx="); Serial.print(live.vibration.vx, 2);
+  Serial.print(" vy="); Serial.print(live.vibration.vy, 2);
+  Serial.print(" vz="); Serial.print(live.vibration.vz, 2);
+  Serial.print(" vt="); Serial.print(live.vibration.vt, 2);
+  Serial.print(" max="); Serial.print(live.vibration.maxTotal, 2);
+  Serial.print(" avg="); Serial.print(live.vibration.avgTotal, 2);
+  Serial.print(" ax="); Serial.print(live.vibration.ax_g, 3);
+  Serial.print(" ay="); Serial.print(live.vibration.ay_g, 3);
+  Serial.print(" az="); Serial.print(live.vibration.az_g, 3);
+  Serial.print("  sndDb="); Serial.print(live.sound.dbRel, 1);
+  Serial.print("  sndPeak="); Serial.print(live.sound.peakHz, 1);
+  Serial.print("  sndFFT="); Serial.print(live.soundSpectrum.valid ? "T" : "F");
+  Serial.print(" mount="); Serial.print(live.mount.analysisTrusted ? "T" : "F");
+  Serial.print(" state="); Serial.print((int)live.mount.state);
+  Serial.print(" conf="); Serial.print(live.mount.confidence, 1);
+  Serial.print(" status="); Serial.println(live.system.statusText);
 }
 
 void computeThermalThresholdRegion(ThermalFrameData& thermal, const ThermalDisplayState& display) {
@@ -161,6 +155,43 @@ void computeThermalThresholdRegion(ThermalFrameData& thermal, const ThermalDispl
   thermal.thresholdRegion.minY = minY;
   thermal.thresholdRegion.maxX = maxX;
   thermal.thresholdRegion.maxY = maxY;
+}
+
+void handleJoystickActions() {
+  joystickInput.update(live.ui);
+
+  if (joystickInput.consumeShortPress()) {
+    live.ui.currentPage = (live.ui.currentPage + 1) % 5;
+  }
+
+  if (joystickInput.consumeLongPress()) {
+    if (recordingMode == REC_IDLE) {
+      requestRecordingStart();
+    } else {
+      requestRecordingStop();
+    }
+  }
+}
+
+void updateThermalPointerFromJoystick() {
+  if (live.ui.currentPage != PAGE_THERMAL) return;
+
+  const int imgX = 10;
+  const int imgY = 40;
+  const int imgW = 320;
+  const int imgH = 216;
+
+  int px = live.ui.pointer.xi;
+  int py = live.ui.pointer.yi;
+
+  if (px < imgX) px = imgX;
+  if (px >= imgX + imgW) px = imgX + imgW - 1;
+  if (py < imgY) py = imgY;
+  if (py >= imgY + imgH) py = imgY + imgH - 1;
+
+  int thermalX = map(px, imgX, imgX + imgW - 1, 0, THERMAL_W - 1);
+  int thermalY = map(py, imgY, imgY + imgH - 1, 0, THERMAL_H - 1);
+  thermalCameraSensor.setPointer(thermalX, thermalY);
 }
 
 bool isAnalysisTrustedNow() {
@@ -250,62 +281,10 @@ void processArmedRecording() {
   }
 }
 
-void handleButtonEvent(ButtonInput::Event evt) {
-  switch (evt) {
-    case ButtonInput::SHORT_PRESS:
-      if (recordingMode == REC_IDLE) requestRecordingStart();
-      else requestRecordingStop();
-      break;
-
-    case ButtonInput::LONG_PRESS:
-      tftUI.nextPage();
-      break;
-
-    case ButtonInput::NONE:
-    default:
-      break;
-  }
-}
-
-void handleTouchEvent(TouchInput::EventType evt) {
-  switch (evt) {
-    case TouchInput::TOUCH_TAB_VIB:
-      tftUI.setPage(PAGE_VIB);
-      break;
-
-    case TouchInput::TOUCH_TAB_TEMP:
-      tftUI.setPage(PAGE_TEMP);
-      break;
-
-    case TouchInput::TOUCH_TAB_THERMAL:
-      tftUI.setPage(PAGE_THERMAL);
-      break;
-
-    case TouchInput::TOUCH_TAB_SOUND:
-      tftUI.setPage(PAGE_SOUND);
-      break;
-
-    case TouchInput::TOUCH_TAB_SYS:
-      tftUI.setPage(PAGE_SYS);
-      break;
-
-    case TouchInput::TOUCH_PREV_PAGE:
-      tftUI.prevPage();
-      break;
-
-    case TouchInput::TOUCH_NEXT_PAGE:
-      tftUI.nextPage();
-      break;
-
-    case TouchInput::TOUCH_NONE:
-    default:
-      break;
-  }
-}
-
 void updateSystemState() {
   live.system.sdOK = sdManager.isReady();
   live.system.recording = recorder.isRecording();
+  live.ui.recOn = recorder.isRecording();
   live.system.currentBaseName = recorder.currentBaseName();
   live.system.recordingMode = recordingMode;
   live.system.manualOverride = manualOverride;
@@ -323,7 +302,7 @@ void updateSystemState() {
 }
 
 void updateSensors(float dt) {
-  vibrationSensor.update(dt, live.vibration);
+  vibrationSensor.update(live.vibration, live.vibrationSpectrum);
 
   unsigned long nowMicros = micros();
   if (lastVibrationSampleMicros == 0 || (nowMicros - lastVibrationSampleMicros) >= 5000) {
@@ -374,24 +353,20 @@ void updateSensors(float dt) {
   }
 
   unsigned long nowMs = millis();
-  if (isAnalysisTrustedNow()) {
-    if (lastFftMs == 0 || (nowMs - lastFftMs) >= 250) {
-      fftAnalyzer.computeSoundSpectrum(
-        microphoneSensor.getCenteredSamples(),
-        microphoneSensor.getSampleCount(),
-        AUDIO_SAMPLE_RATE,
-        live.soundSpectrum
-      );
-      lastFftMs = nowMs;
-    }
+  if (lastFftMs == 0 || (nowMs - lastFftMs) >= 250) {
+    fftAnalyzer.computeSoundSpectrum(
+      microphoneSensor.getCenteredSamples(),
+      microphoneSensor.getSampleCount(),
+      AUDIO_SAMPLE_RATE,
+      live.soundSpectrum
+    );
+    live.sound.peakHz = live.soundSpectrum.valid ? live.soundSpectrum.dominantHz : 0.0f;
+    lastFftMs = nowMs;
+  }
 
-    if (lastVibrationFftMs == 0 || (nowMs - lastVibrationFftMs) >= 250) {
-      vibrationFFT.compute(vibrationSampler, selectedVibrationFFTaxis, live.vibrationSpectrum);
-      lastVibrationFftMs = nowMs;
-    }
-  } else {
-    live.soundSpectrum = SoundSpectrumData{};
-    live.vibrationSpectrum = VibrationSpectrumData{};
+  if (lastVibrationFftMs == 0 || (nowMs - lastVibrationFftMs) >= 250) {
+    vibrationFFT.compute(vibrationSampler, selectedVibrationFFTaxis, live.vibrationSpectrum);
+    lastVibrationFftMs = nowMs;
   }
 }
 
@@ -415,11 +390,6 @@ void updateRecording() {
   }
 }
 
-void initTouchBusSafety() {
-  pinMode(TOUCH_CS, OUTPUT);
-  digitalWrite(TOUCH_CS, HIGH);
-}
-
 // =====================================================
 // SETUP
 // =====================================================
@@ -427,25 +397,17 @@ void setup() {
   Serial.begin(115200);
   delay(1500);
 
-  // Shared SPI bus for TFT + touch
-  initTouchBusSafety();
-  SPI.begin(TFT_SCLK, TOUCH_MISO, TFT_MOSI, TFT_CS);
-
-  // Raw devices
-  ts.begin();
-  ts.setRotation(1);
-
   // Modular inputs / UI
-  button.begin();
-  touch.begin();
+  joystickInput.begin();
   tftUI.begin();
 
   // Sensors
-  bool adxlOK = vibrationSensor.begin();
+  bool vibOK = vibrationSensor.begin();
   bool tempOK = temperatureSensor.begin();
   bool thermalOK = thermalCameraSensor.begin();
   bool micOK  = microphoneSensor.begin();
   Serial.println(thermalOK ? "MLX90640 ready" : "MLX90640 not found");
+  Serial.println(vibOK ? "IIS3DWB ready" : "IIS3DWB not found");
   vibrationSampler.begin(200.0f);
   mountDetector.begin();
 
@@ -485,44 +447,18 @@ void setup() {
   // Timing
   lastMicros = micros();
 
-  // Boot screen
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(16, 18);
-  tft.print("PM Node Boot");
-
-  tft.setTextSize(2);
-  tft.setCursor(16, 56);
-  tft.print("ADXL: ");
-  tft.print(adxlOK ? "OK" : "FAIL");
-
-  tft.setCursor(16, 82);
-  tft.print("TEMP: ");
-  tft.print(tempOK ? "OK" : "FAIL");
-
-  tft.setCursor(16, 108);
-  tft.print("MLX : ");
-  tft.print(thermalOK ? "OK" : "FAIL");
-
-  tft.setCursor(16, 134);
-  tft.print("MIC : ");
-  tft.print(micOK ? "OK" : "FAIL");
-
-  tft.setCursor(16, 160);
-  tft.print("SD  : ");
-  tft.print(sdOK ? "OK" : "FAIL");
-
-  tft.setTextSize(1);
-  tft.setCursor(16, 190);
-  tft.print("Short press = record");
-  tft.setCursor(16, 202);
-  tft.print("Long press = next page");
+  // Boot display
+  live.system.statusText = "Booting...";
+  live.system.recording = false;
+  live.system.currentBaseName = "";
+  live.system.recordingMode = recordingMode;
+  live.system.sdOK = sdOK;
+  live.ui.currentPage = PAGE_VIB;
+  live.ui.recOn = false;
+  tftUI.draw(live);
 
   delay(1000);
 
-  // Start on vibration page
-  tftUI.setPage(PAGE_VIB);
   updateSystemState();
 }
 
@@ -534,81 +470,8 @@ void loop() {
   webUI.handleClient();
 
   // Inputs
-  TouchInput::EventType touchEvent = touch.update();
-  tftUI.setTouchPoint(touch.lastX(), touch.lastY(), touch.isPressed());
-
-  bool consumedThermalTouch = false;
-  if (tftUI.consumeThermalRangeToggleRequest()) {
-    thermalRangeMode = (thermalRangeMode == THERMAL_RANGE_AUTO)
-      ? THERMAL_RANGE_FIXED
-      : THERMAL_RANGE_AUTO;
-    consumedThermalTouch = true;
-  }
-  if (tftUI.consumeThermalZoomCycleRequest()) {
-    if (thermalZoom < 1.5f) thermalZoom = 2.0f;
-    else if (thermalZoom < 2.5f) thermalZoom = 3.0f;
-    else thermalZoom = 1.0f;
-
-    if (thermalZoom == 1.0f) {
-      thermalCenterX = (THERMAL_W - 1) * 0.5f;
-      thermalCenterY = (THERMAL_H - 1) * 0.5f;
-    }
-    consumedThermalTouch = true;
-  }
-  if (tftUI.consumeThermalPaletteCycleRequest()) {
-    if (thermalPalette == THERMAL_PALETTE_IRON) thermalPalette = THERMAL_PALETTE_RAINBOW;
-    else if (thermalPalette == THERMAL_PALETTE_RAINBOW) thermalPalette = THERMAL_PALETTE_GRAYSCALE;
-    else thermalPalette = THERMAL_PALETTE_IRON;
-    consumedThermalTouch = true;
-  }
-  if (tftUI.consumeThermalHotspotToggleRequest()) {
-    if (thermalHotspotMode == THERMAL_HOTSPOT_AUTO) {
-      thermalHotspotMode = THERMAL_HOTSPOT_LOCKED;
-      thermalLockedHotspotX = live.thermal.pointerX;
-      thermalLockedHotspotY = live.thermal.pointerY;
-    } else {
-      thermalHotspotMode = THERMAL_HOTSPOT_AUTO;
-    }
-    consumedThermalTouch = true;
-  }
-  if (tftUI.consumeThermalThresholdCycleRequest()) {
-    if (thermalThresholdMode == THERMAL_THRESHOLD_OFF) {
-      thermalThresholdMode = THERMAL_THRESHOLD_ABOVE;
-      thermalThresholdF = 100.0f;
-    } else {
-      if (thermalThresholdF < 95.0f) thermalThresholdF = 100.0f;
-      else if (thermalThresholdF < 110.0f) thermalThresholdF = 120.0f;
-      else if (thermalThresholdF < 130.0f) thermalThresholdF = 140.0f;
-      else thermalThresholdMode = THERMAL_THRESHOLD_OFF;
-    }
-    consumedThermalTouch = true;
-  }
-
-  handleButtonEvent(button.update());
-  if (!consumedThermalTouch) {
-    handleTouchEvent(touchEvent);
-  }
-
-  int thermalX = 0;
-  int thermalY = 0;
-  if (tftUI.getThermalPointerRequest(thermalX, thermalY)) {
-    thermalCameraSensor.setPointer(thermalX, thermalY);
-  }
-
-  float thermalPanX = 0.0f;
-  float thermalPanY = 0.0f;
-  if (tftUI.getThermalPanRequest(thermalPanX, thermalPanY)) {
-    thermalCenterX = thermalPanX;
-    thermalCenterY = thermalPanY;
-  }
-
-  int lockX = 0;
-  int lockY = 0;
-  if (tftUI.consumeThermalHotspotLockHereRequest(lockX, lockY) &&
-      thermalHotspotMode == THERMAL_HOTSPOT_LOCKED) {
-    thermalLockedHotspotX = lockX;
-    thermalLockedHotspotY = lockY;
-  }
+  handleJoystickActions();
+  updateThermalPointerFromJoystick();
 
   // Sensor timing
   unsigned long now = micros();
@@ -628,6 +491,13 @@ void loop() {
   // State
   updateSystemState();
 
+  // Telemetry
+  unsigned long nowMs = millis();
+  if (lastTelemetryMs == 0 || (nowMs - lastTelemetryMs) >= TELEMETRY_INTERVAL_MS) {
+    printTelemetry();
+    lastTelemetryMs = nowMs;
+  }
+
   // Diagnostics
   if (isAnalysisTrustedNow()) {
     diagnostics.update(live);
@@ -639,7 +509,7 @@ void loop() {
   updateRecording();
 
   // TFT UI
-  tftUI.render(live, touch.lastX(), touch.lastY());
+  tftUI.draw(live);
 
   delay(1);
 }

@@ -2,8 +2,6 @@
 #include <math.h>
 
 bool ThermalCameraSensor::begin() {
-  Wire.begin(I2C_SDA, I2C_SCL, 400000);
-
   if (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &Wire)) {
     return false;
   }
@@ -18,6 +16,12 @@ bool ThermalCameraSensor::begin() {
     case 8: mlx.setRefreshRate(MLX90640_8_HZ); break;
     default: mlx.setRefreshRate(MLX90640_2_HZ); break;
   }
+
+  haveSmoothed = false;
+  havePointerSmooth = false;
+  pointerX = THERMAL_W / 2;
+  pointerY = THERMAL_H / 2;
+  smoothPointerF = 0.0f;
 
   return true;
 }
@@ -44,7 +48,11 @@ bool ThermalCameraSensor::update(ThermalFrameData& out) {
   }
 
   out.valid = true;
+
   float ambientC = mlx.getTa();
+  if (isnan(ambientC) || isinf(ambientC) || ambientC < -40.0f || ambientC > 150.0f) {
+    ambientC = 25.0f;
+  }
   out.ambientF = cToF(ambientC);
 
   float localMin = 100000.0f;
@@ -58,7 +66,7 @@ bool ThermalCameraSensor::update(ThermalFrameData& out) {
       int idx = y * THERMAL_W + x;
       float c = frameC[idx];
 
-      if (isnan(c) || isinf(c) || c < -100.0f || c > 1000.0f) {
+      if (isnan(c) || isinf(c) || c < -40.0f || c > 200.0f) {
         c = ambientC;
       }
 
@@ -97,14 +105,13 @@ bool ThermalCameraSensor::update(ThermalFrameData& out) {
   out.pointerY = clampi(pointerY, 0, THERMAL_H - 1);
   out.pointerF = out.pixelsF[out.pointerY * THERMAL_W + out.pointerX];
 
-  static bool havePointerSmooth = false;
-  static float smoothPointerF = 0.0f;
   if (!havePointerSmooth) {
     smoothPointerF = out.pointerF;
     havePointerSmooth = true;
   } else {
-    smoothPointerF = smoothPointerF * 0.65f + out.pointerF * 0.35f;
+    smoothPointerF = smoothPointerF * (1.0f - POINTER_SMOOTH_ALPHA) + out.pointerF * POINTER_SMOOTH_ALPHA;
   }
+
   out.pointerDisplayF = smoothPointerF;
 
   return true;

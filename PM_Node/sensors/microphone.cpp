@@ -62,6 +62,7 @@ void MicrophoneSensor::update(SoundData& out) {
   out.peak = peak;
   out.hz = computeDominantFreqZeroCross(centeredSamples, sampleCount, AUDIO_SAMPLE_RATE);
   out.db = 20.0f * log10f((out.rms + 1.0f) / 10.0f);
+  out.dbRel = out.db;
 }
 
 float MicrophoneSensor::computeDominantFreqZeroCross(const int32_t *buf, int count, float sampleRate) {

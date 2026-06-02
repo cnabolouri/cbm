@@ -24,6 +24,7 @@ public:
   void setThermalHotspotRefs(ThermalHotspotMode* modePtr, int* xPtr, int* yPtr);
   void setThermalThresholdRefs(ThermalThresholdMode* modePtr, float* thresholdPtr);
   void setThermalPointerCallback(std::function<void(int,int)> cb);
+  void setThermalSnapshotCallback(std::function<void()> cb);
 
 private:
   void initWiFiAP();
@@ -39,6 +40,7 @@ private:
   void handleLiveVibrationFFTPage();
   void handleLiveTemperaturePage();
   void handleLiveThermalPage();
+  void handleSoundPage();
   void handleLiveSoundPage();
   void handleLiveSoundFFTPage();
   void handleSessions();
@@ -61,8 +63,11 @@ private:
   void handleSetThermalHotspotPoint();
   void handleSetThermalThreshold();
   void handleSetThermalPointer();
+  void handleSaveThermalSnapshot();
   void handleStatusJson();
   void handleLiveJson();
+  void handleVibrationJson();
+  void handleSoundJson();
   void handleAnalysisJson();
   void handleThermalFrameJson();
   void handleSoundSpectrumJson();
@@ -93,4 +98,5 @@ private:
   ThermalThresholdMode* thermalThresholdModePtr = nullptr;
   float* thermalThresholdFPtr = nullptr;
   std::function<void(int,int)> thermalPointerSetter;
+  std::function<void()> thermalSnapshotCallback;
 };

@@ -27,6 +27,7 @@ enum MountState {
 };
 
 struct MountData {
+  bool attached = false;
   MountState state = MOUNT_UNKNOWN;
   float confidence = 0.0f;
   float dynamicG = 0.0f;
@@ -36,17 +37,42 @@ struct MountData {
 };
 
 struct VibrationData {
+  float vx = 0.0f;
+  float vy = 0.0f;
+  float vz = 0.0f;
+  float vt = 0.0f;
+
   float x_in_s = 0.0f;
   float y_in_s = 0.0f;
   float z_in_s = 0.0f;
   float total_in_s = 0.0f;
+
+  float ax_g = 0.0f;
+  float ay_g = 0.0f;
+  float az_g = 0.0f;
+
+  float maxTotal = 0.0f;
+  float avgTotal = 0.0f;
 };
 
 struct TemperatureData {
-  float objF = 0.0f;
-  float refF = 0.0f;
+  float refF = 0.0f;    // DS18B20 reference/contact temp
+  float objF = 0.0f;    // derived from thermal hotspot
+  float deltaF = 0.0f;  // objF - refF
   float ambF = 0.0f;
-  float deltaF = 0.0f;
+};
+
+struct UIPointerState {
+  float x = TFT_W * 0.5f;
+  float y = TFT_H * 0.5f;
+  int xi = TFT_W / 2;
+  int yi = TFT_H / 2;
+};
+
+struct UIState {
+  int currentPage = 0;
+  bool recOn = false;
+  UIPointerState pointer;
 };
 
 struct ThermalRegionStats {
@@ -126,6 +152,9 @@ struct ThermalDisplayState {
 };
 
 struct SoundData {
+  float dbRel = 0.0f;
+  float peakHz = 0.0f;
+
   float rms = 0.0f;
   float db = 0.0f;
   float hz = 0.0f;
@@ -214,6 +243,7 @@ struct AnalysisData {
   VibrationAnalysis vibration;
   TemperatureAnalysis temperature;
   SoundAnalysis sound;
+  bool valid = false;
 };
 
 struct SpectrumPeak {
@@ -222,14 +252,18 @@ struct SpectrumPeak {
 };
 
 struct SoundSpectrumData {
+  static const int FFT_SIZE = 256;
+  static const int BINS = 64;
   static const int MAX_BINS = 64;
 
   int bins = 0;
   float hz[MAX_BINS] = {0};
   float mag[MAX_BINS] = {0};
 
+  float sampleRateHz = 0.0f;
   float dominantHz = 0.0f;
   float dominantMag = 0.0f;
+  float dominantAmp = 0.0f;
 
   float lowBand = 0.0f;
   float midBand = 0.0f;
@@ -241,6 +275,7 @@ struct SoundSpectrumData {
   bool harmonic3 = false;
 
   String character = "Unknown";
+  bool valid = false;
 };
 
 struct VibrationSpectrumData {
@@ -263,6 +298,7 @@ struct VibrationSpectrumData {
 
   String sourceAxis = "X";
   String character = "Unknown";
+  bool valid = false;
 };
 
 struct LiveData {
@@ -270,6 +306,7 @@ struct LiveData {
   TemperatureData temperature;
   SoundData sound;
   SystemState system;
+  UIState ui;
   AnalysisData analysis;
   SoundSpectrumData soundSpectrum;
   VibrationSpectrumData vibrationSpectrum;

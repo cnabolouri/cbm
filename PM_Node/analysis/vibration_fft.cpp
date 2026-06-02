@@ -131,6 +131,7 @@ void VibrationFFT::compute(const VibrationSampler& sampler, VibrationAxis axis, 
   }
 
   pickTopPeaks(out.hz, out.mag, out.bins, out.peaks, out.harmonic2, out.harmonic3);
+  out.valid = true;
 
   if (out.dominantMag <= 0.0f) {
     out.character = "Quiet";

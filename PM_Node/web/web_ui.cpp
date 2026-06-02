@@ -121,7 +121,7 @@ String WebUI::htmlHeader(const String& title) {
   s += "<a href='/live/vibration_fft'>Vibration FFT</a>";
   s += "<a href='/live/temperature'>Temperature</a>";
   s += "<a href='/live/thermal'>Thermal</a>";
-  s += "<a href='/live/sound'>Sound</a>";
+  s += "<a class='btn' href='/live/sound'>Sound</a>";
   s += "<a href='/live/sound_fft'>Sound FFT</a>";
   s += "<a href='/files'>Sessions</a>";
   s += "</div>";
@@ -140,7 +140,7 @@ void WebUI::initRoutes() {
   server.on("/live/vibration_fft", HTTP_GET, [this]() { handleLiveVibrationFFTPage(); });
   server.on("/live/temperature", HTTP_GET, [this]() { handleLiveTemperaturePage(); });
   server.on("/live/thermal", HTTP_GET, [this]() { handleLiveThermalPage(); });
-  server.on("/live/sound", HTTP_GET, [this]() { handleLiveSoundPage(); });
+  server.on("/live/sound", HTTP_GET, [this]() { handleSoundPage(); });
   server.on("/live/sound_fft", HTTP_GET, [this]() { handleLiveSoundFFTPage(); });
   server.on("/sessions", HTTP_GET, [this]() { handleSessions(); });
   server.on("/files", HTTP_GET, [this]() { handleFiles(); });
@@ -161,9 +161,12 @@ void WebUI::initRoutes() {
   server.on("/set_thermal_hotspot_mode", HTTP_GET, [this]() { handleSetThermalHotspotMode(); });
   server.on("/set_thermal_hotspot_point", HTTP_GET, [this]() { handleSetThermalHotspotPoint(); });
   server.on("/set_thermal_threshold", HTTP_GET, [this]() { handleSetThermalThreshold(); });
+  server.on("/save_thermal_snapshot", HTTP_GET, [this]() { handleSaveThermalSnapshot(); });
   server.on("/set_thermal_pointer", HTTP_GET, [this]() { handleSetThermalPointer(); });
   server.on("/api/status", HTTP_GET, [this]() { handleStatusJson(); });
   server.on("/api/live", HTTP_GET, [this]() { handleLiveJson(); });
+  server.on("/api/vibration", HTTP_GET, [this]() { handleVibrationJson(); });
+  server.on("/api/sound", HTTP_GET, [this]() { handleSoundJson(); });
   server.on("/api/analysis", HTTP_GET, [this]() { handleAnalysisJson(); });
   server.on("/api/thermal_frame", HTTP_GET, [this]() { handleThermalFrameJson(); });
   server.on("/api/sound_fft", HTTP_GET, [this]() { handleSoundSpectrumJson(); });
@@ -359,11 +362,14 @@ void WebUI::handleLiveVibrationPage() {
   s += "<div class='metric'><b>Max Total</b><br><span id='vmax'>-</span></div>";
   s += "<div class='metric'><b>Average</b><br><span id='vavg'>-</span></div>";
   s += "<div class='metric'><b>Dominant Axis</b><br><span id='vaxis'>-</span></div>";
+  s += "<div class='metric'><b>Dominant Hz</b><br><span id='fftHz'>-</span></div>";
+  s += "<div class='metric'><b>FFT Status</b><br><span id='fftStatus'>-</span></div>";
   s += "</div></div>";
 
   s += "<div class='card'><h2>XYZ + Total Trend</h2><canvas id='vibChart' width='900' height='260'></canvas></div>";
   s += "<div class='card'><h2>Total Trend + Moving Average</h2><canvas id='vibTotalChart' width='900' height='220'></canvas></div>";
   s += "<div class='card'><h2>Axis Magnitudes</h2><canvas id='vibBars' width='900' height='220'></canvas></div>";
+  s += "<div class='card'><h2>Vibration FFT</h2><canvas id='fftCanvas' width='900' height='240'></canvas></div>";
 
   s += "<script>";
   s += "const MAX_POINTS=140; const vx=[],vy=[],vz=[],vt=[];";
@@ -373,7 +379,8 @@ void WebUI::handleLiveVibrationPage() {
   s += "function rangeOf(series,opts={}){let all=[]; series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v)))); if(!all.length)return{min:0,max:1}; let min=Math.min(...all),max=Math.max(...all); if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor); if(opts.zeroMin)min=0; if(opts.centerZero){const m=Math.max(Math.abs(min),Math.abs(max),opts.absoluteFloor||0.001);min=-m;max=m;} if(max===min)max=min+1; const span=max-min,pad=span*(opts.paddingFrac||0.12); min-=opts.zeroMin?0:pad; max+=pad; if(opts.zeroMin&&min<0)min=0; return{min,max};}";
   s += "function drawAdvancedChart(canvasId,series,colors,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d'); const w=c.width,h=c.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,w,h); ctx.strokeStyle='#2d2d2d'; ctx.lineWidth=1; for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();} for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();} const rg=rangeOf(series,opts); function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;} if(rg.min<0&&rg.max>0){let zy=py(0);ctx.strokeStyle='#555';ctx.beginPath();ctx.moveTo(0,zy);ctx.lineTo(w,zy);ctx.stroke();} series.forEach((arr,i)=>{if(!arr||arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();}); ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+rg.min.toFixed(4),8,h-8);ctx.fillText('max:'+rg.max.toFixed(4),8,14);}";
   s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d'); const w=c.width,h=c.height; ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,w,h); const maxVal=Math.max(...values,maxFloor); const barW=Math.floor(w/values.length)-20; values.forEach((v,i)=>{const x=20+i*Math.floor(w/values.length); const bh=(v/maxVal)*(h-50); const y=h-bh-25; ctx.fillStyle=colors[i]; ctx.fillRect(x,y,barW,bh); ctx.fillStyle='#ddd'; ctx.font='12px Arial'; ctx.fillText(labels[i],x,h-8); ctx.fillText(v.toFixed(4),x,y-6);});}";
-  s += "async function poll(){const r=await fetch('/api/analysis'); const d=await r.json(); setText('vx',d.vx.toFixed(5)); setText('vy',d.vy.toFixed(5)); setText('vz',d.vz.toFixed(5)); setText('vtot',d.vtot.toFixed(5)); setText('vmax',d.vibration.maxTotal.toFixed(5)); setText('vavg',d.vibration.avgTotal.toFixed(5)); setText('vaxis',d.vibration.dominantAxis); push(vx,d.vx); push(vy,d.vy); push(vz,d.vz); push(vt,d.vtot); drawAdvancedChart('vibChart',[vx,vy,vz,vt],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],{centerZero:true,absoluteFloor:0.002,paddingFrac:0.15}); drawAdvancedChart('vibTotalChart',[vt,movingAverage(vt,10)],['#ffd54a','#ffffff'],{zeroMin:true,absoluteFloor:0.002,paddingFrac:0.15}); drawBars('vibBars',['|X|','|Y|','|Z|','TOT'],[Math.abs(d.vx),Math.abs(d.vy),Math.abs(d.vz),Math.abs(d.vtot)],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],0.01);}";
+  s += "function drawFFT(spec){const c=document.getElementById('fftCanvas'),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}if(!spec||!spec.valid||!spec.mag||!spec.mag.length){setText('fftStatus','warming up...');setText('fftHz','-');return;}setText('fftStatus','active');setText('fftHz',spec.dominantHz.toFixed(1)+' Hz');const maxMag=Math.max(...spec.mag,0.001);const maxHz=Math.max(...(spec.hz||[]),1);for(let i=1;i<spec.mag.length;i++){const x=spec.hz&&spec.hz[i]?(spec.hz[i]/maxHz)*w:(i/spec.mag.length)*w;const bh=(spec.mag[i]/maxMag)*(h-2);ctx.strokeStyle='#ffd54a';ctx.beginPath();ctx.moveTo(x,h-1);ctx.lineTo(x,h-1-bh);ctx.stroke();}ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText(maxHz.toFixed(1)+' Hz',w-80,h-8);ctx.fillText('max: '+maxMag.toFixed(4),8,14);}";
+  s += "async function poll(){const r=await fetch('/api/vibration'); const d=await r.json(); const vib=d.vibration||{}; const spec=d.vibrationSpectrum||{}; setText('vx',vib.vx.toFixed(5)); setText('vy',vib.vy.toFixed(5)); setText('vz',vib.vz.toFixed(5)); setText('vtot',vib.vt.toFixed(5)); setText('vmax',(vib.maxTotal||0).toFixed(5)); setText('vavg',(vib.avgTotal||0).toFixed(5)); setText('vaxis',vib.dominantAxis||'-'); push(vx,vib.vx); push(vy,vib.vy); push(vz,vib.vz); push(vt,vib.vt); drawAdvancedChart('vibChart',[vx,vy,vz,vt],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],{centerZero:true,absoluteFloor:0.002,paddingFrac:0.15}); drawAdvancedChart('vibTotalChart',[vt,movingAverage(vt,10)],['#ffd54a','#ffffff'],{zeroMin:true,absoluteFloor:0.002,paddingFrac:0.15}); drawBars('vibBars',['|X|','|Y|','|Z|','TOT'],[Math.abs(vib.vx),Math.abs(vib.vy),Math.abs(vib.vz),Math.abs(vib.vt)],['#ff4d4d','#3ddc84','#4da3ff','#ffd54a'],0.01); drawFFT(spec);}";
   s += "setInterval(poll,400); poll();";
   s += "</script>";
   s += htmlFooter();
@@ -538,36 +545,33 @@ void WebUI::handleLiveThermalPage() {
   server.send(200, "text/html", s);
 }
 
-void WebUI::handleLiveSoundPage() {
+void WebUI::handleSoundPage() {
   String s = htmlHeader("Live Sound");
   s += "<h1>Live Sound</h1>";
+  s += "<div class='card'>SNDv2</div>";
 
   s += "<div class='card'><div class='grid'>";
-  s += "<div class='metric'><b>dB</b><br><span id='db'>-</span></div>";
-  s += "<div class='metric'><b>RMS</b><br><span id='rms'>-</span></div>";
-  s += "<div class='metric'><b>Hz</b><br><span id='hz'>-</span></div>";
-  s += "<div class='metric'><b>Peak</b><br><span id='peak'>-</span></div>";
-  s += "<div class='metric'><b>Max dB</b><br><span id='dbmax'>-</span></div>";
-  s += "<div class='metric'><b>Avg dB</b><br><span id='dbavg'>-</span></div>";
+  s += "<div class='metric'><b>Level</b><br><span id='sndLevel'>-</span></div>";
+  s += "<div class='metric'><b>Peak Hz</b><br><span id='sndPeak'>-</span></div>";
+  s += "<div class='metric'><b>FFT Status</b><br><span id='sndStatus'>-</span></div>";
   s += "</div></div>";
 
-  s += "<div class='card'><h2>dB and RMS Trend</h2><canvas id='soundChart' width='900' height='260'></canvas></div>";
-  s += "<div class='card'><h2>Frequency Trend</h2><canvas id='hzChart' width='900' height='220'></canvas></div>";
-  s += "<div class='card'><h2>Sound Snapshot</h2><canvas id='soundBars' width='900' height='220'></canvas></div>";
+  s += "<div class='card'><h2>Sound FFT</h2><canvas id='sndCanvas' width='900' height='260'></canvas></div>";
 
   s += "<script>";
-  s += "const MAX_POINTS=140; const db=[],rms=[],hz=[];";
-  s += "function push(a,v){a.push(v); if(a.length>MAX_POINTS) a.shift();}";
   s += "function setText(id,v){document.getElementById(id).textContent=v;}";
-  s += "function movingAverage(arr,win=8){const out=[];for(let i=0;i<arr.length;i++){let s=0,n=0;for(let j=Math.max(0,i-win+1);j<=i;j++){s+=arr[j];n++;}out.push(n?s/n:0);}return out;}";
-  s += "function rangeOf(series,opts={}){let all=[];series.forEach(a=>all=all.concat(a.filter(v=>Number.isFinite(v))));if(!all.length)return{min:0,max:1};let min=Math.min(...all),max=Math.max(...all);if(opts.absoluteFloor!==undefined)max=Math.max(max,opts.absoluteFloor);if(opts.zeroMin)min=0;if(max===min)max=min+1;const span=max-min,pad=span*(opts.paddingFrac||0.12);min-=opts.zeroMin?0:pad;max+=pad;if(opts.zeroMin&&min<0)min=0;return{min,max};}";
-  s += "function drawAdvancedChart(canvasId,series,colors,opts={}){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}for(let i=1;i<6;i++){let x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}const rg=rangeOf(series,opts);function py(v){return h-((v-rg.min)/(rg.max-rg.min))*h;}series.forEach((arr,i)=>{if(!arr||arr.length<2)return;ctx.strokeStyle=colors[i];ctx.lineWidth=2;ctx.beginPath();for(let k=0;k<arr.length;k++){let x=(k/(arr.length-1))*w;let y=py(arr[k]);if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='#aaa';ctx.font='12px Arial';ctx.fillText('min:'+rg.min.toFixed(2),8,h-8);ctx.fillText('max:'+rg.max.toFixed(2),8,14);}";
-  s += "function drawBars(canvasId,labels,values,colors,maxFloor=1){const c=document.getElementById(canvasId),ctx=c.getContext('2d');const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,w,h);const maxVal=Math.max(...values,maxFloor);const barW=Math.floor(w/values.length)-20;values.forEach((v,i)=>{const x=20+i*Math.floor(w/values.length);const bh=(v/maxVal)*(h-50);const y=h-bh-25;ctx.fillStyle=colors[i];ctx.fillRect(x,y,barW,bh);ctx.fillStyle='#ddd';ctx.font='12px Arial';ctx.fillText(labels[i],x,h-8);ctx.fillText(v.toFixed(2),x,y-6);});}";
-  s += "async function poll(){const r=await fetch('/api/analysis');const d=await r.json();setText('db',d.db.toFixed(2));setText('rms',d.rms.toFixed(2));setText('hz',d.hz.toFixed(1));setText('peak',d.peak);setText('dbmax',d.sound.maxDb.toFixed(2));setText('dbavg',d.sound.avgDb.toFixed(2));push(db,d.db);push(rms,d.rms);push(hz,d.hz);drawAdvancedChart('soundChart',[db,movingAverage(db,10)],['#3ddc84','#ffffff'],{zeroMin:true,absoluteFloor:10,paddingFrac:0.15});drawAdvancedChart('hzChart',[hz,movingAverage(hz,8)],['#ffd54a','#ff8c42'],{zeroMin:true,absoluteFloor:100,paddingFrac:0.15});drawBars('soundBars',['dB','RMS','Hz/100','Peak'],[d.db,d.rms,d.hz/100.0,d.peak],['#3ddc84','#4da3ff','#ffd54a','#ff4d4d'],1);}";
-  s += "setInterval(poll,400); poll();";
+  s += "const sndCanvas=document.getElementById('sndCanvas');";
+  s += "const sndCtx=sndCanvas.getContext('2d');";
+  s += "function drawSndFFT(spec){sndCtx.clearRect(0,0,sndCanvas.width,sndCanvas.height);sndCtx.fillStyle='#0d0d0d';sndCtx.fillRect(0,0,sndCanvas.width,sndCanvas.height);sndCtx.strokeStyle='#2d2d2d';for(let i=1;i<4;i++){let y=sndCanvas.height*i/4;sndCtx.beginPath();sndCtx.moveTo(0,y);sndCtx.lineTo(sndCanvas.width,y);sndCtx.stroke();}sndCtx.strokeStyle='#ffffff';sndCtx.strokeRect(0,0,sndCanvas.width,sndCanvas.height);if(!spec||!spec.valid||!spec.bins||!spec.bins.length){setText('sndStatus','warming up...');return;}setText('sndStatus','active');let maxBin=0.001;for(let i=1;i<spec.bins.length;i++){if(spec.bins[i]>maxBin)maxBin=spec.bins[i];}for(let i=1;i<spec.bins.length;i++){const x=(i/spec.bins.length)*sndCanvas.width;const h=(spec.bins[i]/maxBin)*(sndCanvas.height-2);sndCtx.beginPath();sndCtx.moveTo(x,sndCanvas.height-1);sndCtx.lineTo(x,sndCanvas.height-1-h);sndCtx.strokeStyle='cyan';sndCtx.stroke();}sndCtx.fillStyle='#aaa';sndCtx.font='12px Arial';sndCtx.fillText('max: '+maxBin.toFixed(3),8,14);}";
+  s += "async function poll(){try{const r=await fetch('/api/sound');const d=await r.json();setText('sndLevel',d.sound.dbRel.toFixed(1)+' dB rel');setText('sndPeak',d.soundSpectrum.valid?d.soundSpectrum.dominantHz.toFixed(1)+' Hz':'-');drawSndFFT(d.soundSpectrum);}catch(err){console.error('sound fetch error',err);}}";
+  s += "setInterval(poll,300); poll();";
   s += "</script>";
   s += htmlFooter();
   server.send(200, "text/html", s);
+}
+
+void WebUI::handleLiveSoundPage() {
+  handleSoundPage();
 }
 
 void WebUI::handleLiveSoundFFTPage() {
@@ -998,6 +1002,14 @@ void WebUI::handleSetThermalPointer() {
   server.send(200, "text/plain", "OK");
 }
 
+void WebUI::handleSaveThermalSnapshot() {
+  if (thermalSnapshotCallback) {
+    thermalSnapshotCallback();
+  }
+  server.sendHeader("Location", "/live/thermal");
+  server.send(303);
+}
+
 void WebUI::handleStatusJson() {
   String s = "{";
   s += "\"sd\":" + String(live.system.sdOK ? "true" : "false") + ",";
@@ -1027,6 +1039,87 @@ void WebUI::handleLiveJson() {
   s += "\"db\":" + String(live.sound.db, 2) + ",";
   s += "\"rms\":" + String(live.sound.rms, 2) + ",";
   s += "\"hz\":" + String(live.sound.hz, 2);
+  s += "}";
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleVibrationJson() {
+  String s = "{";
+
+  s += "\"vibration\":{";
+  s += "\"vx\":" + String(live.vibration.vx, 5) + ",";
+  s += "\"vy\":" + String(live.vibration.vy, 5) + ",";
+  s += "\"vz\":" + String(live.vibration.vz, 5) + ",";
+  s += "\"vt\":" + String(live.vibration.vt, 5) + ",";
+  s += "\"maxTotal\":" + String(live.vibration.maxTotal, 5) + ",";
+  s += "\"avgTotal\":" + String(live.vibration.avgTotal, 5) + ",";
+  s += "\"ax_g\":" + String(live.vibration.ax_g, 5) + ",";
+  s += "\"ay_g\":" + String(live.vibration.ay_g, 5) + ",";
+  s += "\"az_g\":" + String(live.vibration.az_g, 5) + ",";
+  s += "\"dominantAxis\":\"" + live.analysis.vibration.dominantAxis + "\"";
+  s += "},";
+
+  s += "\"vibrationSpectrum\":{";
+  s += "\"valid\":" + String(live.vibrationSpectrum.valid ? "true" : "false") + ",";
+  s += "\"dominantHz\":" + String(live.vibrationSpectrum.dominantHz, 2) + ",";
+  s += "\"dominantAmp\":" + String(live.vibrationSpectrum.dominantMag, 6) + ",";
+  s += "\"dominantMag\":" + String(live.vibrationSpectrum.dominantMag, 6) + ",";
+  s += "\"sourceAxis\":\"" + live.vibrationSpectrum.sourceAxis + "\",";
+  s += "\"binCount\":" + String(live.vibrationSpectrum.bins) + ",";
+  s += "\"hz\":[";
+  for (int i = 0; i < live.vibrationSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.vibrationSpectrum.hz[i], 2);
+  }
+  s += "],";
+  s += "\"mag\":[";
+  for (int i = 0; i < live.vibrationSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.vibrationSpectrum.mag[i], 6);
+  }
+  s += "],";
+  s += "\"bins\":[";
+  for (int i = 0; i < live.vibrationSpectrum.bins; i++) {
+    if (i) s += ",";
+    s += String(live.vibrationSpectrum.mag[i], 6);
+  }
+  s += "]";
+  s += "}";
+
+  s += "}";
+  server.send(200, "application/json", s);
+}
+
+void WebUI::handleSoundJson() {
+  Serial.print("WEB sound json: peak=");
+  Serial.print(live.soundSpectrum.dominantHz, 1);
+  Serial.print(" valid=");
+  Serial.println(live.soundSpectrum.valid ? "T" : "F");
+
+  String s = "{";
+
+  s += "\"sound\":{";
+  s += "\"dbRel\":" + String(live.sound.dbRel, 2) + ",";
+  s += "\"peakHz\":" + String(live.sound.peakHz, 2) + ",";
+  s += "\"db\":" + String(live.sound.db, 2) + ",";
+  s += "\"rms\":" + String(live.sound.rms, 2);
+  s += "},";
+
+  s += "\"soundSpectrum\":{";
+  s += "\"valid\":" + String(live.soundSpectrum.valid ? "true" : "false") + ",";
+  s += "\"sampleRateHz\":" + String(live.soundSpectrum.sampleRateHz, 2) + ",";
+  s += "\"dominantHz\":" + String(live.soundSpectrum.dominantHz, 2) + ",";
+  s += "\"dominantAmp\":" + String(live.soundSpectrum.dominantAmp, 6) + ",";
+  s += "\"binCount\":" + String(live.soundSpectrum.bins) + ",";
+  s += "\"bins\":[";
+  for (int i = 0; i < SoundSpectrumData::BINS; i++) {
+    if (i) s += ",";
+    float v = (i < live.soundSpectrum.bins) ? live.soundSpectrum.mag[i] : 0.0f;
+    s += String(v, 6);
+  }
+  s += "]";
+  s += "}";
+
   s += "}";
   server.send(200, "application/json", s);
 }
@@ -1061,9 +1154,9 @@ void WebUI::handleAnalysisJson() {
   s += "},";
 
   s += "\"vibration\":{";
-  s += "\"currentTotal\":" + String(live.analysis.vibration.currentTotal, 5) + ",";
-  s += "\"maxTotal\":" + String(live.analysis.vibration.maxTotal, 5) + ",";
-  s += "\"avgTotal\":" + String(live.analysis.vibration.avgTotal, 5) + ",";
+  s += "\"currentTotal\":" + String(live.vibration.total_in_s, 5) + ",";
+  s += "\"maxTotal\":" + String(live.vibration.maxTotal, 5) + ",";
+  s += "\"avgTotal\":" + String(live.vibration.avgTotal, 5) + ",";
   s += "\"dominantAxis\":\"" + live.analysis.vibration.dominantAxis + "\",";
   s += "\"alert\":\"" + live.analysis.vibration.alert + "\"},";
 
@@ -1154,8 +1247,11 @@ void WebUI::handleThermalFrameJson() {
 
 void WebUI::handleSoundSpectrumJson() {
   String s = "{";
+  s += "\"valid\":" + String(live.soundSpectrum.valid ? "true" : "false") + ",";
+  s += "\"sampleRateHz\":" + String(live.soundSpectrum.sampleRateHz, 2) + ",";
   s += "\"dominantHz\":" + String(live.soundSpectrum.dominantHz, 2) + ",";
   s += "\"dominantMag\":" + String(live.soundSpectrum.dominantMag, 4) + ",";
+  s += "\"dominantAmp\":" + String(live.soundSpectrum.dominantAmp, 6) + ",";
   s += "\"centroidHz\":" + String(live.soundSpectrum.centroidHz, 2) + ",";
   s += "\"lowBand\":" + String(live.soundSpectrum.lowBand, 4) + ",";
   s += "\"midBand\":" + String(live.soundSpectrum.midBand, 4) + ",";

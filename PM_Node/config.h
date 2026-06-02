@@ -1,41 +1,34 @@
 #pragma once
 
-// ========================= TFT + TOUCH =========================
-#define TFT_MOSI   1
-#define TFT_SCLK   2
-#define TFT_CS     41
-#define TFT_DC     42
-#define TFT_RST    -1
+// ========================= ST7796 TFT =========================
+#define TFT_CS    41
+#define TFT_DC    42
+#define TFT_RST   -1
+#define TFT_SCLK  2
+#define TFT_MOSI  1
+#define TFT_MISO  -1
+#define TFT_BL    45
 
-#define TOUCH_MISO 21
-#define TOUCH_CS   47
-#define TOUCH_IRQ  48
+static const int TFT_W = 480;
+static const int TFT_H = 320;
 
-// Touch calibration from your tested setup
-static const int TS_MINX = 200;
-static const int TS_MAXX = 3800;
-static const int TS_MINY = 200;
-static const int TS_MAXY = 3800;
+// ========================= JOYSTICK =========================
+#define JOY_X_PIN   15
+#define JOY_Y_PIN   16
+#define JOY_SW_PIN  17
 
-static const bool TOUCH_SWAP_XY  = false;
-static const bool TOUCH_INVERT_X = true;
-static const bool TOUCH_INVERT_Y = true;
+static const unsigned long JOY_DEBOUNCE_MS = 35;
+static const unsigned long JOY_LONG_PRESS_MS = 700;
 
-// ========================= BUTTON =========================
-#define BUTTON_PIN 3
-static const unsigned long BUTTON_DEBOUNCE_MS = 35;
-static const unsigned long SHORT_PRESS_MS = 40;   // record
-static const unsigned long LONG_PRESS_MS  = 700;  // next page
+static const float JOY_DEADZONE_NORM = 0.24f;
+static const float JOY_FILTER_ALPHA = 0.14f;
+static const float POINTER_MAX_SPEED = 2.2f;
 
-// ========================= ADXL357 =========================
-#define ADXL_CS   10
-#define ADXL_SCK  12
-#define ADXL_MISO 13
-#define ADXL_MOSI 11
-
-static const float LSB_PER_G_10G = 51200.0f;
-static const float G_TO_MPS2 = 9.80665f;
-static const float MPS_TO_INS = 39.3701f;
+// ========================= IIS3DWB VIBRATION =========================
+#define IIS_CS    10
+#define IIS_SCK   12
+#define IIS_MISO  13
+#define IIS_MOSI  11
 
 // ========================= TEMP / THERMAL =========================
 #define I2C_SDA 8
@@ -50,7 +43,6 @@ static const int MLX90640_REFRESH_HZ = 2;
 
 static const int THERMAL_DRAW_W_TFT = 64;
 static const int THERMAL_DRAW_H_TFT = 48;
-
 static const int THERMAL_DRAW_W_WEB = 96;
 static const int THERMAL_DRAW_H_WEB = 72;
 
@@ -72,10 +64,6 @@ static const int AUDIO_BUFFER_SAMPLES = 1024;
 // ========================= WIFI =========================
 static const char* AP_SSID = "PM-Node";
 static const char* AP_PASS = "pmnode123";
-
-// ========================= UI =========================
-static const int TFT_W = 320;
-static const int TFT_H = 240;
 
 // ========================= RECORD =========================
 static const unsigned long CSV_LOG_INTERVAL_MS = 50;
