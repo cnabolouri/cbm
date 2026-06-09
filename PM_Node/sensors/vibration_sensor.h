@@ -16,7 +16,9 @@ public:
   float getLastRawZg() const;
 
 private:
-  SPIClass spi = SPIClass(FSPI);
+  // Keep IIS3DWB off the TFT's SPI peripheral. Arduino_GFX's ESP32 SPI bus
+  // commonly uses FSPI internally, so reinitializing FSPI here breaks redraws.
+  SPIClass spi = SPIClass(HSPI);
 
   static const uint8_t REG_WHO_AM_I = 0x0F;
   static const uint8_t REG_CTRL1_XL = 0x10;

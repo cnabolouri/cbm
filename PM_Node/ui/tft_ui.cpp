@@ -1,17 +1,19 @@
 #include "tft_ui.h"
 
-#define COLOR_BLACK   0x0000
-#define COLOR_BLUE    0x001F
-#define COLOR_RED     0xF800
-#define COLOR_GREEN   0x07E0
-#define COLOR_CYAN    0x07FF
-#define COLOR_YELLOW  0xFFE0
-#define COLOR_WHITE   0xFFFF
-#define COLOR_GRAY    0x8410
+#define COLOR_BLACK 0x0000
+#define COLOR_BLUE 0x001F
+#define COLOR_RED 0xF800
+#define COLOR_GREEN 0x07E0
+#define COLOR_CYAN 0x07FF
+#define COLOR_YELLOW 0xFFE0
+#define COLOR_WHITE 0xFFFF
+#define COLOR_GRAY 0x8410
 
 static float clampFloatTFT(float v, float lo, float hi) {
-  if (v < lo) return lo;
-  if (v > hi) return hi;
+  if (v < lo)
+    return lo;
+  if (v > hi)
+    return hi;
   return v;
 }
 
@@ -19,7 +21,8 @@ static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
-uint16_t TFTUI::thermalColor565(float tempF, float minF, float maxF, ThermalPalette palette) const {
+uint16_t TFTUI::thermalColor565(float tempF, float minF, float maxF,
+                                ThermalPalette palette) const {
   float t = (tempF - minF) / ((maxF - minF) > 0.001f ? (maxF - minF) : 0.001f);
   t = clampFloatTFT(t, 0.0f, 1.0f);
 
@@ -28,66 +31,63 @@ uint16_t TFTUI::thermalColor565(float tempF, float minF, float maxF, ThermalPale
   uint8_t b = 0;
 
   switch (palette) {
-    case THERMAL_PALETTE_GRAYSCALE: {
-      uint8_t v = (uint8_t)(255.0f * t);
-      r = v;
-      g = v;
-      b = v;
-      break;
+  case THERMAL_PALETTE_GRAYSCALE: {
+    uint8_t v = (uint8_t)(255.0f * t);
+    r = v;
+    g = v;
+    b = v;
+    break;
+  }
+  case THERMAL_PALETTE_RAINBOW: {
+    if (t < 0.25f) {
+      float u = t / 0.25f;
+      r = 0;
+      g = (uint8_t)(255.0f * u);
+      b = 255;
+    } else if (t < 0.50f) {
+      float u = (t - 0.25f) / 0.25f;
+      r = 0;
+      g = 255;
+      b = (uint8_t)(255.0f * (1.0f - u));
+    } else if (t < 0.75f) {
+      float u = (t - 0.50f) / 0.25f;
+      r = (uint8_t)(255.0f * u);
+      g = 255;
+      b = 0;
+    } else {
+      float u = (t - 0.75f) / 0.25f;
+      r = 255;
+      g = (uint8_t)(255.0f * (1.0f - u));
+      b = 0;
     }
-    case THERMAL_PALETTE_RAINBOW: {
-      if (t < 0.25f) {
-        float u = t / 0.25f;
-        r = 0;
-        g = (uint8_t)(255.0f * u);
-        b = 255;
-      } else if (t < 0.50f) {
-        float u = (t - 0.25f) / 0.25f;
-        r = 0;
-        g = 255;
-        b = (uint8_t)(255.0f * (1.0f - u));
-      } else if (t < 0.75f) {
-        float u = (t - 0.50f) / 0.25f;
-        r = (uint8_t)(255.0f * u);
-        g = 255;
-        b = 0;
-      } else {
-        float u = (t - 0.75f) / 0.25f;
-        r = 255;
-        g = (uint8_t)(255.0f * (1.0f - u));
-        b = 0;
-      }
-      break;
+    break;
+  }
+  case THERMAL_PALETTE_IRON:
+  default: {
+    if (t < 0.33f) {
+      float u = t / 0.33f;
+      r = (uint8_t)(80.0f * u);
+      g = 0;
+      b = (uint8_t)(40.0f + 100.0f * u);
+    } else if (t < 0.66f) {
+      float u = (t - 0.33f) / 0.33f;
+      r = (uint8_t)(80.0f + 120.0f * u);
+      g = (uint8_t)(40.0f * u);
+      b = (uint8_t)(140.0f * (1.0f - u));
+    } else {
+      float u = (t - 0.66f) / 0.34f;
+      r = 255;
+      g = (uint8_t)(60.0f + 195.0f * u);
+      b = (uint8_t)(20.0f * (1.0f - u));
     }
-    case THERMAL_PALETTE_IRON:
-    default: {
-      if (t < 0.33f) {
-        float u = t / 0.33f;
-        r = (uint8_t)(80.0f * u);
-        g = 0;
-        b = (uint8_t)(40.0f + 100.0f * u);
-      } else if (t < 0.66f) {
-        float u = (t - 0.33f) / 0.33f;
-        r = (uint8_t)(80.0f + 120.0f * u);
-        g = (uint8_t)(40.0f * u);
-        b = (uint8_t)(140.0f * (1.0f - u));
-      } else {
-        float u = (t - 0.66f) / 0.34f;
-        r = 255;
-        g = (uint8_t)(60.0f + 195.0f * u);
-        b = (uint8_t)(20.0f * (1.0f - u));
-      }
-      break;
-    }
+    break;
+  }
   }
 
   return rgb565(r, g, b);
 }
 
 bool TFTUI::begin() {
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH);
-
   bus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCLK, TFT_MOSI, TFT_MISO);
   gfx = new Arduino_ST7796(bus, TFT_RST, 1, false, 320, 480, 0, 0, 0, 0);
 
@@ -100,66 +100,109 @@ bool TFTUI::begin() {
   return true;
 }
 
-void TFTUI::draw(const LiveData& live) {
-  if (!gfx) return;
-  gfx->fillScreen(COLOR_BLACK);
-  drawHeader(live);
+void TFTUI::draw(const LiveData &live) {
+  if (!gfx)
+    return;
 
-  switch (live.ui.currentPage) {
-    case PAGE_VIB:      drawVibrationPage(live); break;
-    case PAGE_TEMP:     drawTemperaturePage(live); break;
-    case PAGE_THERMAL:  drawThermalPage(live); break;
-    case PAGE_SOUND:    drawSoundPage(live); break;
-    case PAGE_SYS:      drawSystemPage(live); break;
-    default:            drawHomePage(live); break;
+  unsigned long now = millis();
+
+  if (live.ui.currentPage != lastPage || live.ui.recOn != lastRecOn) {
+    pageNeedsFullRedraw = true;
   }
 
-  drawFooter(live);
-  lastPage = live.ui.currentPage;
+  if (pageNeedsFullRedraw) {
+    gfx->fillScreen(COLOR_BLACK);
+    drawHeader(live);
+    drawStaticPage(live);
+    drawFooter(live);
+    lastPage = live.ui.currentPage;
+    lastRecOn = live.ui.recOn;
+    lastPointerX = -1;
+    lastPointerY = -1;
+    pageNeedsFullRedraw = false;
+  }
+
+  if (lastDynamicDrawMs == 0 || now - lastDynamicDrawMs >= 50) {
+    lastDynamicDrawMs = now;
+    drawHeader(live);
+    drawDynamicElements(live);
+  }
 }
 
-void TFTUI::drawHeader(const LiveData& live) {
-  const char* labels[5] = {"VIBRATION", "TEMPERATURE", "THERMAL", "SOUND", "SYSTEM"};
-  int pageIndex = live.ui.currentPage;
-  if (pageIndex < 0) pageIndex = 0;
-  if (pageIndex > 4) pageIndex = 4;
-  const char* title = labels[pageIndex];
+void TFTUI::drawStaticPage(const LiveData &live) {
+  switch (live.ui.currentPage) {
+    case PAGE_HOME:
+      drawHomePage(live);
+      break;
+    case PAGE_VIBRATION:
+      drawVibrationPage(live);
+      break;
+    case PAGE_THERMAL:
+      drawThermalPage(live);
+      break;
+    case PAGE_SOUND:
+      drawSoundPage(live);
+      break;
+    case PAGE_SYSTEM:
+      drawSystemPage(live);
+      break;
+    default:
+      drawHomePage(live);
+      break;
+  }
+}
 
-  gfx->fillRect(0, 0, TFT_W, 32, COLOR_BLUE);
+void TFTUI::drawDynamicElements(const LiveData &live) {
+  gfx->fillRect(0, 34, TFT_W, TFT_H - 76, COLOR_BLACK);
+  drawStaticPage(live);
+  drawFooter(live);
+
+  drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_CYAN);
+  lastPointerX = live.ui.pointer.xi;
+  lastPointerY = live.ui.pointer.yi;
+}
+
+void TFTUI::drawHeader(const LiveData &live) {
+  const char *labels[PAGE_COUNT] = {"HOME", "VIBRATION", "THERMAL", "SOUND",
+                                    "SYSTEM"};
+  int pageIndex = live.ui.currentPage;
+  if (pageIndex < 0)
+    pageIndex = 0;
+  if (pageIndex >= PAGE_COUNT)
+    pageIndex = PAGE_COUNT - 1;
+  const char *title = labels[pageIndex];
+
+  gfx->fillRect(0, 0, TFT_W, 34, COLOR_GRAY);
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
-  gfx->setCursor(12, 6);
+  gfx->setCursor(8, 8);
   gfx->print(title);
 
+  gfx->fillRect(300, 0, 180, 34, COLOR_GRAY);
+  gfx->setCursor(320, 8);
+  gfx->setTextColor(live.ui.recOn ? COLOR_RED : COLOR_WHITE);
   if (live.ui.recOn) {
-    gfx->fillRect(360, 6, 100, 20, COLOR_RED);
-    gfx->setCursor(372, 10);
     gfx->print("REC ON");
   } else {
-    gfx->fillRect(360, 6, 100, 20, COLOR_GRAY);
-    gfx->setTextColor(COLOR_WHITE);
-    gfx->setCursor(372, 10);
-    gfx->print("READY");
+    gfx->print("REC OFF");
   }
 }
 
-void TFTUI::drawFooter(const LiveData& live) {
-  gfx->fillRect(0, TFT_H - 20, TFT_W, 20, COLOR_GRAY);
+void TFTUI::drawFooter(const LiveData &live) {
+  gfx->fillRect(0, TFT_H - 42, TFT_W, 42, COLOR_GRAY);
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(1);
-  gfx->setCursor(10, TFT_H - 16);
-  gfx->print("Page ");
-  gfx->print(live.ui.currentPage + 1);
-  gfx->print(" / 5");
 
-  gfx->setCursor(120, TFT_H - 16);
-  gfx->print("Pointer: ");
-  gfx->print(live.ui.pointer.xi);
-  gfx->print(",");
-  gfx->print(live.ui.pointer.yi);
+  gfx->setCursor(8, TFT_H - 34);
+  gfx->printf("X:%4d Y:%4d SW:%s", live.ui.joyRawX, live.ui.joyRawY,
+              live.ui.joyButtonPressed ? "PRESSED" : "RELEASED");
+
+  gfx->setCursor(8, TFT_H - 18);
+  gfx->printf("Cur:(%d,%d) Norm:(%.2f,%.2f)", live.ui.pointer.xi,
+              live.ui.pointer.yi, live.ui.joyNormX, live.ui.joyNormY);
 }
 
-void TFTUI::drawHomePage(const LiveData& live) {
+void TFTUI::drawHomePage(const LiveData &live) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
   gfx->setCursor(16, 60);
@@ -173,10 +216,9 @@ void TFTUI::drawHomePage(const LiveData& live) {
   gfx->setCursor(16, 142);
   gfx->print("Joystick   : move pointer");
 
-  drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_WHITE);
 }
 
-void TFTUI::drawVibrationPage(const LiveData& live) {
+void TFTUI::drawVibrationPage(const LiveData &live) {
   gfx->setTextColor(COLOR_CYAN);
   gfx->setTextSize(2);
   gfx->setCursor(16, 56);
@@ -231,15 +273,36 @@ void TFTUI::drawVibrationPage(const LiveData& live) {
   if (live.vibrationSpectrum.valid) {
     float maxBin = 0.001f;
     for (int i = 1; i < live.vibrationSpectrum.bins; i++) {
-      if (live.vibrationSpectrum.mag[i] > maxBin) maxBin = live.vibrationSpectrum.mag[i];
+      if (live.vibrationSpectrum.mag[i] > maxBin)
+        maxBin = live.vibrationSpectrum.mag[i];
     }
 
     for (int i = 1; i < live.vibrationSpectrum.bins; i++) {
       int x = plotX + (i * plotW) / live.vibrationSpectrum.bins;
       int h = (int)((live.vibrationSpectrum.mag[i] / maxBin) * (plotH - 2));
-      if (h < 0) h = 0;
-      if (h > plotH - 2) h = plotH - 2;
+      if (h < 0)
+        h = 0;
+      if (h > plotH - 2)
+        h = plotH - 2;
       gfx->drawFastVLine(x, plotY + plotH - 1 - h, h, COLOR_YELLOW);
+    }
+
+    int px = live.ui.pointer.xi;
+    int py = live.ui.pointer.yi;
+    if (px >= plotX && px < plotX + plotW && py >= plotY && py < plotY + plotH) {
+      int bin = ((px - plotX) * live.vibrationSpectrum.bins) / plotW;
+      if (bin < 1) bin = 1;
+      if (bin >= live.vibrationSpectrum.bins) bin = live.vibrationSpectrum.bins - 1;
+
+      gfx->drawFastVLine(px, plotY + 1, plotH - 2, COLOR_CYAN);
+      gfx->fillRect(plotX, plotY + plotH + 6, plotW, 18, COLOR_BLACK);
+      gfx->setTextColor(COLOR_CYAN);
+      gfx->setTextSize(1);
+      gfx->setCursor(plotX, plotY + plotH + 8);
+      gfx->print("Ptr ");
+      gfx->print(live.vibrationSpectrum.hz[bin], 1);
+      gfx->print(" Hz  mag ");
+      gfx->print(live.vibrationSpectrum.mag[bin], 4);
     }
   }
 
@@ -259,10 +322,9 @@ void TFTUI::drawVibrationPage(const LiveData& live) {
   gfx->print(live.vibration.az_g, 3);
   gfx->print(" g");
 
-  drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_WHITE);
 }
 
-void TFTUI::drawTemperaturePage(const LiveData& live) {
+void TFTUI::drawTemperaturePage(const LiveData &live) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
   gfx->setCursor(12, 48);
@@ -286,7 +348,7 @@ void TFTUI::drawTemperaturePage(const LiveData& live) {
   gfx->print(" F");
 }
 
-void TFTUI::drawThermalPage(const LiveData& live) {
+void TFTUI::drawThermalPage(const LiveData &live) {
   const int imgX = 10;
   const int imgY = 40;
   const int imgW = 320;
@@ -306,27 +368,23 @@ void TFTUI::drawThermalPage(const LiveData& live) {
   }
 
   const float minF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_FIXED)
-    ? live.thermalDisplay.fixedMinF
-    : live.thermal.minF;
+                         ? live.thermalDisplay.fixedMinF
+                         : live.thermal.minF;
   const float maxF = (live.thermalDisplay.rangeMode == THERMAL_RANGE_FIXED)
-    ? live.thermalDisplay.fixedMaxF
-    : live.thermal.maxF;
+                         ? live.thermalDisplay.fixedMaxF
+                         : live.thermal.maxF;
 
   for (int y = 0; y < THERMAL_H; y++) {
     for (int x = 0; x < THERMAL_W; x++) {
       float temp = live.thermal.pixelsF[y * THERMAL_W + x];
-      uint16_t color = thermalColor565(temp, minF, maxF, live.thermalDisplay.palette);
+      uint16_t color =
+          thermalColor565(temp, minF, maxF, live.thermalDisplay.palette);
       int px = imgX + x * cellW;
       int py = imgY + y * cellH;
       int w = (x == THERMAL_W - 1) ? (imgW - cellW * x) : cellW;
       int h = (y == THERMAL_H - 1) ? (imgH - cellH * y) : cellH;
       gfx->fillRect(px, py, w, h, color);
     }
-  }
-
-  if (live.ui.pointer.xi >= imgX && live.ui.pointer.xi < imgX + imgW &&
-      live.ui.pointer.yi >= imgY && live.ui.pointer.yi < imgY + imgH) {
-    drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_WHITE);
   }
 
   gfx->setTextColor(COLOR_WHITE);
@@ -355,9 +413,33 @@ void TFTUI::drawThermalPage(const LiveData& live) {
   gfx->setCursor(statsX, imgY + 208);
   gfx->print(maxF, 1);
   gfx->print(" F");
+
+  int px = live.ui.pointer.xi;
+  int py = live.ui.pointer.yi;
+  if (px >= imgX && px < imgX + imgW && py >= imgY && py < imgY + imgH) {
+    int thermalX = map(px, imgX, imgX + imgW - 1, 0, THERMAL_W - 1);
+    int thermalY = map(py, imgY, imgY + imgH - 1, 0, THERMAL_H - 1);
+    if (thermalX < 0) thermalX = 0;
+    if (thermalX >= THERMAL_W) thermalX = THERMAL_W - 1;
+    if (thermalY < 0) thermalY = 0;
+    if (thermalY >= THERMAL_H) thermalY = THERMAL_H - 1;
+    float tempF = live.thermal.pixelsF[thermalY * THERMAL_W + thermalX];
+
+    gfx->fillRect(imgX, imgY + imgH + 4, imgW, 18, COLOR_BLACK);
+    gfx->setTextColor(COLOR_CYAN);
+    gfx->setTextSize(1);
+    gfx->setCursor(imgX, imgY + imgH + 7);
+    gfx->print("Pointer ");
+    gfx->print(thermalX);
+    gfx->print(",");
+    gfx->print(thermalY);
+    gfx->print("  ");
+    gfx->print(tempF, 1);
+    gfx->print(" F");
+  }
 }
 
-void TFTUI::drawSoundPage(const LiveData& live) {
+void TFTUI::drawSoundPage(const LiveData &live) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
   gfx->setCursor(16, 56);
@@ -393,26 +475,49 @@ void TFTUI::drawSoundPage(const LiveData& live) {
 
   if (live.soundSpectrum.valid) {
     int binCount = live.soundSpectrum.bins;
-    if (binCount > SoundSpectrumData::BINS) binCount = SoundSpectrumData::BINS;
+    if (binCount > SoundSpectrumData::BINS)
+      binCount = SoundSpectrumData::BINS;
 
     float maxBin = 0.001f;
     for (int i = 1; i < binCount; i++) {
-      if (live.soundSpectrum.mag[i] > maxBin) maxBin = live.soundSpectrum.mag[i];
+      if (live.soundSpectrum.mag[i] > maxBin)
+        maxBin = live.soundSpectrum.mag[i];
     }
 
     for (int i = 1; i < binCount; i++) {
       int x = plotX + (i * plotW) / binCount;
       int h = (int)((live.soundSpectrum.mag[i] / maxBin) * (plotH - 2));
-      if (h < 0) h = 0;
-      if (h > plotH - 2) h = plotH - 2;
+      if (h < 0)
+        h = 0;
+      if (h > plotH - 2)
+        h = plotH - 2;
       gfx->drawFastVLine(x, plotY + plotH - 1 - h, h, COLOR_CYAN);
+    }
+
+    int px = live.ui.pointer.xi;
+    int py = live.ui.pointer.yi;
+    if (px >= plotX && px < plotX + plotW && py >= plotY && py < plotY + plotH) {
+      int bin = ((px - plotX) * binCount) / plotW;
+      if (bin < 1) bin = 1;
+      if (bin >= binCount) bin = binCount - 1;
+
+      gfx->drawFastVLine(px, plotY + 1, plotH - 2, COLOR_YELLOW);
+      gfx->fillRect(180, 96, 290, 42, COLOR_BLACK);
+      gfx->setTextColor(COLOR_YELLOW);
+      gfx->setTextSize(1);
+      gfx->setCursor(180, 98);
+      gfx->print("Ptr ");
+      gfx->print(live.soundSpectrum.hz[bin], 1);
+      gfx->print(" Hz");
+      gfx->setCursor(180, 114);
+      gfx->print("mag ");
+      gfx->print(live.soundSpectrum.mag[bin], 4);
     }
   }
 
-  drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_WHITE);
 }
 
-void TFTUI::drawSystemPage(const LiveData& live) {
+void TFTUI::drawSystemPage(const LiveData &live) {
   gfx->setTextColor(COLOR_WHITE);
   gfx->setTextSize(2);
   gfx->setCursor(12, 48);
@@ -425,8 +530,9 @@ void TFTUI::drawSystemPage(const LiveData& live) {
 
   gfx->setCursor(12, 132);
   gfx->print("Mode: ");
-  gfx->print(live.system.recordingMode == REC_ACTIVE ? "ACTIVE" :
-             live.system.recordingMode == REC_ARMED_WAITING_MOUNT ? "ARMED" : "IDLE");
+  gfx->print(live.system.recordingMode == REC_ACTIVE                ? "ACTIVE"
+             : live.system.recordingMode == REC_ARMED_WAITING_MOUNT ? "ARMED"
+                                                                    : "IDLE");
 
   gfx->setTextSize(1);
   gfx->setCursor(12, 180);
@@ -434,7 +540,7 @@ void TFTUI::drawSystemPage(const LiveData& live) {
 }
 
 void TFTUI::drawCrosshair(int x, int y, uint16_t color) {
-  gfx->drawFastHLine(max(0, x - 10), y, min(TFT_W - x + 10, 21), color);
-  gfx->drawFastVLine(x, max(0, y - 10), min(TFT_H - y + 10, 21), color);
-  gfx->fillCircle(x, y, 2, color);
+  gfx->drawLine(x - 8, y, x + 8, y, color);
+  gfx->drawLine(x, y - 8, x, y + 8, color);
+  gfx->drawCircle(x, y, 10, color);
 }

@@ -20,6 +20,7 @@ private:
 
   float filteredX = 2048.0f;
   float filteredY = 2048.0f;
+  unsigned long lastUpdateMs = 0;
 
   bool lastBtnState = HIGH;
   unsigned long pressStartMs = 0;

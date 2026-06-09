@@ -1,21 +1,12 @@
 #pragma once
 #include <Arduino.h>
-#include <Arduino_GFX.h>
 
-#if __has_include(<Arduino_ESP32SPI.h>)
-#include <Arduino_ESP32SPI.h>
-#elif __has_include("../../libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32SPI.h")
-#include "../../libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32SPI.h"
+#if __has_include(<Arduino_GFX_Library.h>)
+#include <Arduino_GFX_Library.h>
+#elif __has_include("../../libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h")
+#include "../../libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h"
 #else
-#error "Arduino_ESP32SPI.h not found. Install Arduino_GFX / GFX_Library_for_Arduino or add it to your include path."
-#endif
-
-#if __has_include(<Arduino_ST7796.h>)
-#include <Arduino_ST7796.h>
-#elif __has_include("../../libraries/GFX_Library_for_Arduino/src/display/Arduino_ST7796.h")
-#include "../../libraries/GFX_Library_for_Arduino/src/display/Arduino_ST7796.h"
-#else
-#error "Arduino_ST7796.h not found. Install Arduino_GFX / GFX_Library_for_Arduino or add it to your include path."
+#error "Arduino_GFX_Library.h not found. Install Arduino_GFX / GFX_Library_for_Arduino or add it to your include path."
 #endif
 
 #include "../types.h"
@@ -31,9 +22,16 @@ private:
   Arduino_GFX *gfx = nullptr;
 
   int lastPage = -1;
+  bool pageNeedsFullRedraw = true;
+  unsigned long lastDynamicDrawMs = 0;
+  int lastPointerX = -1;
+  int lastPointerY = -1;
+  bool lastRecOn = false;
 
   void drawHeader(const LiveData& live);
   void drawFooter(const LiveData& live);
+  void drawStaticPage(const LiveData& live);
+  void drawDynamicElements(const LiveData& live);
   void drawHomePage(const LiveData& live);
   void drawVibrationPage(const LiveData& live);
   void drawTemperaturePage(const LiveData& live);

@@ -3,6 +3,7 @@
 
 bool ThermalCameraSensor::begin() {
   if (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &Wire)) {
+    initialized = false;
     return false;
   }
 
@@ -22,6 +23,7 @@ bool ThermalCameraSensor::begin() {
   pointerX = THERMAL_W / 2;
   pointerY = THERMAL_H / 2;
   smoothPointerF = 0.0f;
+  initialized = true;
 
   return true;
 }
@@ -42,6 +44,11 @@ void ThermalCameraSensor::setPointer(int x, int y) {
 }
 
 bool ThermalCameraSensor::update(ThermalFrameData& out) {
+  if (!initialized) {
+    out.valid = false;
+    return false;
+  }
+
   if (mlx.getFrame(frameC) != 0) {
     out.valid = false;
     return false;

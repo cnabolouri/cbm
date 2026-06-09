@@ -111,6 +111,14 @@ void printTelemetry() {
   Serial.print(" mount="); Serial.print(live.mount.analysisTrusted ? "T" : "F");
   Serial.print(" state="); Serial.print((int)live.mount.state);
   Serial.print(" conf="); Serial.print(live.mount.confidence, 1);
+  Serial.print(" joyX="); Serial.print(live.ui.joyRawX);
+  Serial.print(" joyY="); Serial.print(live.ui.joyRawY);
+  Serial.print(" joyNx="); Serial.print(live.ui.joyNormX, 2);
+  Serial.print(" joyNy="); Serial.print(live.ui.joyNormY, 2);
+  Serial.print(" ptr="); Serial.print(live.ui.pointer.xi);
+  Serial.print(",");
+  Serial.print(live.ui.pointer.yi);
+  Serial.print(" page="); Serial.print(live.ui.currentPage);
   Serial.print(" status="); Serial.println(live.system.statusText);
 }
 
@@ -161,7 +169,7 @@ void handleJoystickActions() {
   joystickInput.update(live.ui);
 
   if (joystickInput.consumeShortPress()) {
-    live.ui.currentPage = (live.ui.currentPage + 1) % 5;
+    live.ui.currentPage = (live.ui.currentPage + 1) % PAGE_COUNT;
   }
 
   if (joystickInput.consumeLongPress()) {
@@ -397,6 +405,11 @@ void setup() {
   Serial.begin(115200);
   delay(1500);
 
+  live.ui.pointer.x = TFT_W * 0.5f;
+  live.ui.pointer.y = TFT_H * 0.5f;
+  live.ui.pointer.xi = TFT_W / 2;
+  live.ui.pointer.yi = TFT_H / 2;
+
   // Modular inputs / UI
   joystickInput.begin();
   tftUI.begin();
@@ -453,7 +466,7 @@ void setup() {
   live.system.currentBaseName = "";
   live.system.recordingMode = recordingMode;
   live.system.sdOK = sdOK;
-  live.ui.currentPage = PAGE_VIB;
+  live.ui.currentPage = PAGE_HOME;
   live.ui.recOn = false;
   tftUI.draw(live);
 
@@ -472,6 +485,7 @@ void loop() {
   // Inputs
   handleJoystickActions();
   updateThermalPointerFromJoystick();
+  tftUI.draw(live);
 
   // Sensor timing
   unsigned long now = micros();
@@ -507,9 +521,6 @@ void loop() {
 
   // Recording
   updateRecording();
-
-  // TFT UI
-  tftUI.draw(live);
 
   delay(1);
 }

@@ -17,6 +17,7 @@ private:
   float frameC[THERMAL_PIXELS] = {0};
   float smoothedF[THERMAL_PIXELS] = {0};
 
+  bool initialized = false;
   bool haveSmoothed = false;
 
   int pointerX = THERMAL_W / 2;

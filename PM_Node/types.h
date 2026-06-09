@@ -4,12 +4,13 @@
 #include <Arduino.h>
 #include "config.h"
 
-enum Page {
-  PAGE_VIB = 0,
-  PAGE_TEMP = 1,
-  PAGE_THERMAL = 2,
-  PAGE_SOUND = 3,
-  PAGE_SYS = 4
+enum PageId {
+  PAGE_HOME = 0,
+  PAGE_VIBRATION,
+  PAGE_THERMAL,
+  PAGE_SOUND,
+  PAGE_SYSTEM,
+  PAGE_COUNT
 };
 
 enum VibrationAxis {
@@ -73,6 +74,11 @@ struct UIState {
   int currentPage = 0;
   bool recOn = false;
   UIPointerState pointer;
+  int joyRawX = 0;
+  int joyRawY = 0;
+  bool joyButtonPressed = false;
+  float joyNormX = 0.0f;
+  float joyNormY = 0.0f;
 };
 
 struct ThermalRegionStats {
