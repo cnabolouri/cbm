@@ -1,27 +1,22 @@
 #pragma once
 
 // ========================= ST7796 TFT =========================
-#define TFT_CS    41
-#define TFT_DC    42
-#define TFT_RST   -1
-#define TFT_SCLK  2
-#define TFT_MOSI  1
-#define TFT_MISO  -1
+#define TFT_CS 41
+#define TFT_DC 42
+#define TFT_RST -1
+#define TFT_SCLK 2
+#define TFT_MOSI 1
+#define TFT_MISO -1
 
 static const int TFT_W = 480;
 static const int TFT_H = 320;
 
-// ========================= JOYSTICK =========================
-#define JOY_X_PIN   3
-#define JOY_Y_PIN   14
-#define JOY_SW_PIN  47
+// ========================= ROTARY ENCODER =========================
+#define ENC_CLK_PIN 47
+#define ENC_DT_PIN 14
+#define ENC_SW_PIN 3
 
-static const unsigned long JOY_DEBOUNCE_MS = 20;
-static const unsigned long JOY_LONG_PRESS_MS = 450;
-
-static const float JOY_DEADZONE_NORM = 0.05f;
-static const float JOY_FILTER_ALPHA = 0.35f;
-static const float POINTER_MAX_SPEED = 120.0f;
+static const unsigned long ENC_BTN_DEBOUNCE_MS = 40;
 
 // ========================= IIS3DWB VIBRATION =========================
 #define IIS_CS 10

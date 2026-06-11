@@ -3,19 +3,21 @@
 
 #if __has_include(<Arduino_GFX_Library.h>)
 #include <Arduino_GFX_Library.h>
-#elif __has_include("../../libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h")
+#elif __has_include(                                                           \
+    "../../libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h")
 #include "../../libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h"
 #else
-#error "Arduino_GFX_Library.h not found. Install Arduino_GFX / GFX_Library_for_Arduino or add it to your include path."
+#error                                                                         \
+    "Arduino_GFX_Library.h not found. Install Arduino_GFX / GFX_Library_for_Arduino or add it to your include path."
 #endif
 
-#include "../types.h"
 #include "../config.h"
+#include "../types.h"
 
 class TFTUI {
 public:
   bool begin();
-  void draw(const LiveData& live);
+  void draw(const LiveData &live);
 
 private:
   Arduino_DataBus *bus = nullptr;
@@ -28,16 +30,16 @@ private:
   int lastPointerY = -1;
   bool lastRecOn = false;
 
-  void drawHeader(const LiveData& live);
-  void drawFooter(const LiveData& live);
-  void drawStaticPage(const LiveData& live);
-  void drawDynamicElements(const LiveData& live);
-  void drawHomePage(const LiveData& live);
-  void drawVibrationPage(const LiveData& live);
-  void drawTemperaturePage(const LiveData& live);
-  void drawThermalPage(const LiveData& live);
-  void drawSoundPage(const LiveData& live);
-  void drawSystemPage(const LiveData& live);
-  void drawCrosshair(int x, int y, uint16_t color);
-  uint16_t thermalColor565(float tempF, float minF, float maxF, ThermalPalette palette) const;
+  void drawHeader(const LiveData &live);
+  void drawFooter(const LiveData &live);
+  void drawStaticPage(const LiveData &live);
+  void drawDynamicElements(const LiveData &live);
+  void drawHomePage(const LiveData &live);
+  void drawVibrationPage(const LiveData &live);
+  void drawTemperaturePage(const LiveData &live);
+  void drawThermalPage(const LiveData &live);
+  void drawSoundPage(const LiveData &live);
+  void drawSystemPage(const LiveData &live);
+  uint16_t thermalColor565(float tempF, float minF, float maxF,
+                           ThermalPalette palette) const;
 };

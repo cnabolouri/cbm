@@ -131,24 +131,24 @@ void TFTUI::draw(const LiveData &live) {
 
 void TFTUI::drawStaticPage(const LiveData &live) {
   switch (live.ui.currentPage) {
-    case PAGE_HOME:
-      drawHomePage(live);
-      break;
-    case PAGE_VIBRATION:
-      drawVibrationPage(live);
-      break;
-    case PAGE_THERMAL:
-      drawThermalPage(live);
-      break;
-    case PAGE_SOUND:
-      drawSoundPage(live);
-      break;
-    case PAGE_SYSTEM:
-      drawSystemPage(live);
-      break;
-    default:
-      drawHomePage(live);
-      break;
+  case PAGE_HOME:
+    drawHomePage(live);
+    break;
+  case PAGE_VIBRATION:
+    drawVibrationPage(live);
+    break;
+  case PAGE_THERMAL:
+    drawThermalPage(live);
+    break;
+  case PAGE_SOUND:
+    drawSoundPage(live);
+    break;
+  case PAGE_SYSTEM:
+    drawSystemPage(live);
+    break;
+  default:
+    drawHomePage(live);
+    break;
   }
 }
 
@@ -156,10 +156,6 @@ void TFTUI::drawDynamicElements(const LiveData &live) {
   gfx->fillRect(0, 34, TFT_W, TFT_H - 76, COLOR_BLACK);
   drawStaticPage(live);
   drawFooter(live);
-
-  drawCrosshair(live.ui.pointer.xi, live.ui.pointer.yi, COLOR_CYAN);
-  lastPointerX = live.ui.pointer.xi;
-  lastPointerY = live.ui.pointer.yi;
 }
 
 void TFTUI::drawHeader(const LiveData &live) {
@@ -194,12 +190,12 @@ void TFTUI::drawFooter(const LiveData &live) {
   gfx->setTextSize(1);
 
   gfx->setCursor(8, TFT_H - 34);
-  gfx->printf("X:%4d Y:%4d SW:%s", live.ui.joyRawX, live.ui.joyRawY,
-              live.ui.joyButtonPressed ? "PRESSED" : "RELEASED");
+  gfx->print("Page: ");
+  gfx->print(live.ui.currentPage);
 
   gfx->setCursor(8, TFT_H - 18);
-  gfx->printf("Cur:(%d,%d) Norm:(%.2f,%.2f)", live.ui.pointer.xi,
-              live.ui.pointer.yi, live.ui.joyNormX, live.ui.joyNormY);
+  gfx->print("REC: ");
+  gfx->print(live.ui.recOn ? "ON" : "OFF");
 }
 
 void TFTUI::drawHomePage(const LiveData &live) {
@@ -210,12 +206,11 @@ void TFTUI::drawHomePage(const LiveData &live) {
 
   gfx->setTextSize(1);
   gfx->setCursor(16, 110);
-  gfx->print("Short press: next page");
+  gfx->print("Encoder CW  : next page");
   gfx->setCursor(16, 126);
-  gfx->print("Long press : record toggle");
+  gfx->print("Encoder CCW : previous page");
   gfx->setCursor(16, 142);
-  gfx->print("Joystick   : move pointer");
-
+  gfx->print("Encoder push: REC on/off");
 }
 
 void TFTUI::drawVibrationPage(const LiveData &live) {
@@ -286,24 +281,6 @@ void TFTUI::drawVibrationPage(const LiveData &live) {
         h = plotH - 2;
       gfx->drawFastVLine(x, plotY + plotH - 1 - h, h, COLOR_YELLOW);
     }
-
-    int px = live.ui.pointer.xi;
-    int py = live.ui.pointer.yi;
-    if (px >= plotX && px < plotX + plotW && py >= plotY && py < plotY + plotH) {
-      int bin = ((px - plotX) * live.vibrationSpectrum.bins) / plotW;
-      if (bin < 1) bin = 1;
-      if (bin >= live.vibrationSpectrum.bins) bin = live.vibrationSpectrum.bins - 1;
-
-      gfx->drawFastVLine(px, plotY + 1, plotH - 2, COLOR_CYAN);
-      gfx->fillRect(plotX, plotY + plotH + 6, plotW, 18, COLOR_BLACK);
-      gfx->setTextColor(COLOR_CYAN);
-      gfx->setTextSize(1);
-      gfx->setCursor(plotX, plotY + plotH + 8);
-      gfx->print("Ptr ");
-      gfx->print(live.vibrationSpectrum.hz[bin], 1);
-      gfx->print(" Hz  mag ");
-      gfx->print(live.vibrationSpectrum.mag[bin], 4);
-    }
   }
 
   gfx->setTextSize(1);
@@ -321,7 +298,6 @@ void TFTUI::drawVibrationPage(const LiveData &live) {
   gfx->print("AZ: ");
   gfx->print(live.vibration.az_g, 3);
   gfx->print(" g");
-
 }
 
 void TFTUI::drawTemperaturePage(const LiveData &live) {
@@ -413,30 +389,6 @@ void TFTUI::drawThermalPage(const LiveData &live) {
   gfx->setCursor(statsX, imgY + 208);
   gfx->print(maxF, 1);
   gfx->print(" F");
-
-  int px = live.ui.pointer.xi;
-  int py = live.ui.pointer.yi;
-  if (px >= imgX && px < imgX + imgW && py >= imgY && py < imgY + imgH) {
-    int thermalX = map(px, imgX, imgX + imgW - 1, 0, THERMAL_W - 1);
-    int thermalY = map(py, imgY, imgY + imgH - 1, 0, THERMAL_H - 1);
-    if (thermalX < 0) thermalX = 0;
-    if (thermalX >= THERMAL_W) thermalX = THERMAL_W - 1;
-    if (thermalY < 0) thermalY = 0;
-    if (thermalY >= THERMAL_H) thermalY = THERMAL_H - 1;
-    float tempF = live.thermal.pixelsF[thermalY * THERMAL_W + thermalX];
-
-    gfx->fillRect(imgX, imgY + imgH + 4, imgW, 18, COLOR_BLACK);
-    gfx->setTextColor(COLOR_CYAN);
-    gfx->setTextSize(1);
-    gfx->setCursor(imgX, imgY + imgH + 7);
-    gfx->print("Pointer ");
-    gfx->print(thermalX);
-    gfx->print(",");
-    gfx->print(thermalY);
-    gfx->print("  ");
-    gfx->print(tempF, 1);
-    gfx->print(" F");
-  }
 }
 
 void TFTUI::drawSoundPage(const LiveData &live) {
@@ -493,28 +445,7 @@ void TFTUI::drawSoundPage(const LiveData &live) {
         h = plotH - 2;
       gfx->drawFastVLine(x, plotY + plotH - 1 - h, h, COLOR_CYAN);
     }
-
-    int px = live.ui.pointer.xi;
-    int py = live.ui.pointer.yi;
-    if (px >= plotX && px < plotX + plotW && py >= plotY && py < plotY + plotH) {
-      int bin = ((px - plotX) * binCount) / plotW;
-      if (bin < 1) bin = 1;
-      if (bin >= binCount) bin = binCount - 1;
-
-      gfx->drawFastVLine(px, plotY + 1, plotH - 2, COLOR_YELLOW);
-      gfx->fillRect(180, 96, 290, 42, COLOR_BLACK);
-      gfx->setTextColor(COLOR_YELLOW);
-      gfx->setTextSize(1);
-      gfx->setCursor(180, 98);
-      gfx->print("Ptr ");
-      gfx->print(live.soundSpectrum.hz[bin], 1);
-      gfx->print(" Hz");
-      gfx->setCursor(180, 114);
-      gfx->print("mag ");
-      gfx->print(live.soundSpectrum.mag[bin], 4);
-    }
   }
-
 }
 
 void TFTUI::drawSystemPage(const LiveData &live) {
@@ -537,10 +468,4 @@ void TFTUI::drawSystemPage(const LiveData &live) {
   gfx->setTextSize(1);
   gfx->setCursor(12, 180);
   gfx->print(live.system.statusText);
-}
-
-void TFTUI::drawCrosshair(int x, int y, uint16_t color) {
-  gfx->drawLine(x - 8, y, x + 8, y, color);
-  gfx->drawLine(x, y - 8, x, y + 8, color);
-  gfx->drawCircle(x, y, 10, color);
 }
