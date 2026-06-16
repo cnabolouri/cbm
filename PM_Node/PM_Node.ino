@@ -320,7 +320,8 @@ void updateSystemState() {
 }
 
 void updateSensors(float dt) {
-  vibrationSensor.update(live.vibration, live.vibrationSpectrum);
+  vibrationSensor.update(live.vibration, live.vibrationSpectrum,
+                         live.mount.attached);
 
   unsigned long nowMicros = micros();
   if (lastVibrationSampleMicros == 0 ||

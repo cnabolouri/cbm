@@ -1,14 +1,17 @@
 #ifndef PM_NODE_TYPES_H
 #define PM_NODE_TYPES_H
 
-#include <Arduino.h>
 #include "config.h"
+#include <Arduino.h>
 
 enum PageId {
   PAGE_HOME = 0,
   PAGE_VIBRATION,
+  PAGE_VIBRATION_FFT,
   PAGE_THERMAL,
+  PAGE_TEMPERATURE,
   PAGE_SOUND,
+  PAGE_SOUND_FFT,
   PAGE_SYSTEM,
   PAGE_COUNT
 };
@@ -57,9 +60,12 @@ struct VibrationData {
 };
 
 struct TemperatureData {
-  float refF = 0.0f;    // DS18B20 reference/contact temp
-  float objF = 0.0f;    // derived from thermal hotspot
-  float deltaF = 0.0f;  // objF - refF
+  bool valid = false;
+  float refF = 0.0f; // DS18B20 reference/contact temp
+  float minRefF = 0.0f;
+  float maxRefF = 0.0f;
+  float objF = 0.0f;   // derived from thermal hotspot
+  float deltaF = 0.0f; // objF - refF
   float ambF = 0.0f;
 };
 
@@ -120,10 +126,7 @@ struct ThermalFrameData {
   ThermalRegionStats thresholdRegion;
 };
 
-enum ThermalRangeMode {
-  THERMAL_RANGE_AUTO = 0,
-  THERMAL_RANGE_FIXED = 1
-};
+enum ThermalRangeMode { THERMAL_RANGE_AUTO = 0, THERMAL_RANGE_FIXED = 1 };
 
 enum ThermalPalette {
   THERMAL_PALETTE_IRON = 0,

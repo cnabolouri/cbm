@@ -14,12 +14,8 @@ uint8_t IRAM_ATTR RotaryInput::readAB() {
 void IRAM_ATTR RotaryInput::isrEncoder() {
   static uint8_t lastAB = 0b11;
 
-  static const int8_t transitionTable[16] = {
-     0, -1,  1,  0,
-     1,  0,  0, -1,
-    -1,  0,  0,  1,
-     0,  1, -1,  0
-  };
+  static const int8_t transitionTable[16] = {0,  -1, 1, 0, 1, 0, 0,  -1,
+                                             -1, 0,  0, 1, 0, 1, -1, 0};
 
   uint8_t ab = readAB();
   uint8_t idx = (lastAB << 2) | ab;

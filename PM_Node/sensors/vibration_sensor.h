@@ -1,14 +1,17 @@
 #pragma once
+#include "../config.h"
+#include "../types.h"
 #include <Arduino.h>
 #include <SPI.h>
-#include "../types.h"
-#include "../config.h"
 
 class VibrationSensor {
 public:
   bool begin();
-  bool update(VibrationData& out);
-  bool update(VibrationData& out, VibrationSpectrumData& spectrumOut);
+  bool update(VibrationData &out);
+  bool update(VibrationData &out, bool mounted);
+  bool update(VibrationData &out, VibrationSpectrumData &spectrumOut);
+  bool update(VibrationData &out, VibrationSpectrumData &spectrumOut,
+              bool mounted);
   void resetStats();
 
   float getLastRawXg() const;
@@ -22,12 +25,12 @@ private:
 
   static const uint8_t REG_WHO_AM_I = 0x0F;
   static const uint8_t REG_CTRL1_XL = 0x10;
-  static const uint8_t REG_CTRL3_C  = 0x12;
+  static const uint8_t REG_CTRL3_C = 0x12;
   static const uint8_t REG_OUTX_L_A = 0x28;
   static const uint8_t WHOAMI = 0x7B;
 
   uint8_t readReg(uint8_t reg);
-  void readRegs(uint8_t reg, uint8_t* buf, size_t len);
+  void readRegs(uint8_t reg, uint8_t *buf, size_t len);
   void writeReg(uint8_t reg, uint8_t val);
 
   bool haveBias = false;

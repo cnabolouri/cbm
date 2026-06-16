@@ -14,7 +14,7 @@ uint8_t VibrationSensor::readReg(uint8_t reg) {
   return value;
 }
 
-void VibrationSensor::readRegs(uint8_t reg, uint8_t* buf, size_t len) {
+void VibrationSensor::readRegs(uint8_t reg, uint8_t *buf, size_t len) {
   digitalWrite(IIS_CS, LOW);
   spi.transfer(reg | 0x80);
   for (size_t i = 0; i < len; i++) {
@@ -71,7 +71,9 @@ void VibrationSensor::resetStats() {
   maxTotal = 0.0f;
 }
 
-bool VibrationSensor::update(VibrationData& out) {
+bool VibrationSensor::update(VibrationData &out) { return update(out, true); }
+
+bool VibrationSensor::update(VibrationData &out, bool mounted) {
   uint8_t raw[6] = {0};
   readRegs(REG_OUTX_L_A, raw, 6);
 
@@ -98,9 +100,12 @@ bool VibrationSensor::update(VibrationData& out) {
   float dyg = yg - biasYg;
   float dzg = zg - biasZg;
 
-  if (fabsf(dxg) > 4.0f) dxg = 0.0f;
-  if (fabsf(dyg) > 4.0f) dyg = 0.0f;
-  if (fabsf(dzg) > 4.0f) dzg = 0.0f;
+  if (fabsf(dxg) > 4.0f)
+    dxg = 0.0f;
+  if (fabsf(dyg) > 4.0f)
+    dyg = 0.0f;
+  if (fabsf(dzg) > 4.0f)
+    dzg = 0.0f;
 
   float vxRaw = fabsf(dxg);
   float vyRaw = fabsf(dyg);
@@ -112,10 +117,14 @@ bool VibrationSensor::update(VibrationData& out) {
   sz = sz * (1.0f - DYNAMIC_ALPHA) + vzRaw * DYNAMIC_ALPHA;
   st = st * (1.0f - DYNAMIC_ALPHA) + vtRaw * DYNAMIC_ALPHA;
 
-  if (sx < 0.001f) sx = 0.0f;
-  if (sy < 0.001f) sy = 0.0f;
-  if (sz < 0.001f) sz = 0.0f;
-  if (st < 0.001f) st = 0.0f;
+  if (sx < 0.001f)
+    sx = 0.0f;
+  if (sy < 0.001f)
+    sy = 0.0f;
+  if (sz < 0.001f)
+    sz = 0.0f;
+  if (st < 0.001f)
+    st = 0.0f;
 
   out.vx = sx;
   out.vy = sy;
@@ -131,10 +140,16 @@ bool VibrationSensor::update(VibrationData& out) {
   out.z_in_s = out.vz;
   out.total_in_s = out.vt;
 
-  statsCount++;
-  sumTotal += st;
-  if (st > maxTotal) {
-    maxTotal = st;
+  if (mounted) {
+    statsCount++;
+    sumTotal += st;
+    if (st > maxTotal) {
+      maxTotal = st;
+    }
+  } else {
+    statsCount = 0;
+    sumTotal = 0.0f;
+    maxTotal = 0.0f;
   }
 
   out.maxTotal = maxTotal;
@@ -147,19 +162,19 @@ bool VibrationSensor::update(VibrationData& out) {
   return true;
 }
 
-bool VibrationSensor::update(VibrationData& out, VibrationSpectrumData& spectrumOut) {
+bool VibrationSensor::update(VibrationData &out,
+                             VibrationSpectrumData &spectrumOut) {
+  return update(out, spectrumOut, true);
+}
+
+bool VibrationSensor::update(VibrationData &out,
+                             VibrationSpectrumData &spectrumOut, bool mounted) {
   (void)spectrumOut;
-  return update(out);
+  return update(out, mounted);
 }
 
-float VibrationSensor::getLastRawXg() const {
-  return lastRawXg;
-}
+float VibrationSensor::getLastRawXg() const { return lastRawXg; }
 
-float VibrationSensor::getLastRawYg() const {
-  return lastRawYg;
-}
+float VibrationSensor::getLastRawYg() const { return lastRawYg; }
 
-float VibrationSensor::getLastRawZg() const {
-  return lastRawZg;
-}
+float VibrationSensor::getLastRawZg() const { return lastRawZg; }

@@ -24,22 +24,34 @@ private:
   Arduino_GFX *gfx = nullptr;
 
   int lastPage = -1;
-  bool pageNeedsFullRedraw = true;
-  unsigned long lastDynamicDrawMs = 0;
-  int lastPointerX = -1;
-  int lastPointerY = -1;
-  bool lastRecOn = false;
+  bool lastRec = false;
+  unsigned long lastDynamicRefresh = 0;
 
   void drawHeader(const LiveData &live);
   void drawFooter(const LiveData &live);
-  void drawStaticPage(const LiveData &live);
-  void drawDynamicElements(const LiveData &live);
-  void drawHomePage(const LiveData &live);
-  void drawVibrationPage(const LiveData &live);
-  void drawTemperaturePage(const LiveData &live);
-  void drawThermalPage(const LiveData &live);
-  void drawSoundPage(const LiveData &live);
-  void drawSystemPage(const LiveData &live);
+
+  void drawHomePageStatic();
+  void drawHomePageDynamic(const LiveData &live);
+
+  void drawVibrationPageStatic();
+  void drawVibrationPageDynamic(const LiveData &live);
+  void drawVibrationFFTPageStatic();
+  void drawVibrationFFTPageDynamic(const LiveData &live);
+
+  void drawThermalPageStatic();
+  void drawThermalPageDynamic(const LiveData &live);
+
+  void drawTemperaturePageStatic();
+  void drawTemperaturePageDynamic(const LiveData &live);
+
+  void drawSoundPageStatic();
+  void drawSoundPageDynamic(const LiveData &live);
+  void drawSoundFFTPageStatic();
+  void drawSoundFFTPageDynamic(const LiveData &live);
+
+  void drawSystemPageStatic();
+  void drawSystemPageDynamic(const LiveData &live);
+
   uint16_t thermalColor565(float tempF, float minF, float maxF,
                            ThermalPalette palette) const;
 };

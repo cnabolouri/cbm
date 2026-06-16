@@ -1,8 +1,10 @@
 #include "joystick_input.h"
 
 static float clampFloatJoystick(float v, float lo, float hi) {
-  if (v < lo) return lo;
-  if (v > hi) return hi;
+  if (v < lo)
+    return lo;
+  if (v > hi)
+    return hi;
   return v;
 }
 
@@ -91,10 +93,14 @@ void JoystickInput::update(UIState &ui) {
   int rawY = analogRead(JOY_Y_PIN);
   bool btnPressed = (digitalRead(JOY_SW_PIN) == LOW);
 
-  if (rawX < 0) rawX = 0;
-  if (rawX > 4095) rawX = 4095;
-  if (rawY < 0) rawY = 0;
-  if (rawY > 4095) rawY = 4095;
+  if (rawX < 0)
+    rawX = 0;
+  if (rawX > 4095)
+    rawX = 4095;
+  if (rawY < 0)
+    rawY = 0;
+  if (rawY > 4095)
+    rawY = 4095;
 
   filteredX = filteredX * (1.0f - JOY_FILTER_ALPHA) + rawX * JOY_FILTER_ALPHA;
   filteredY = filteredY * (1.0f - JOY_FILTER_ALPHA) + rawY * JOY_FILTER_ALPHA;
@@ -120,20 +126,35 @@ void JoystickInput::update(UIState &ui) {
   float maxY = (float)(TFT_H - 43);
 
   if (ui.currentPage == PAGE_VIBRATION) {
-    minX = 260.0f;
-    maxX = 459.0f;
-    minY = 80.0f;
-    maxY = 229.0f;
+    minX = 211.0f;
+    maxX = 458.0f;
+    minY = 85.0f;
+    maxY = 262.0f;
+  } else if (ui.currentPage == PAGE_VIBRATION_FFT) {
+    minX = 17.0f;
+    maxX = 458.0f;
+    minY = 85.0f;
+    maxY = 262.0f;
   } else if (ui.currentPage == PAGE_THERMAL) {
     minX = 10.0f;
-    maxX = 329.0f;
-    minY = 40.0f;
-    maxY = 255.0f;
+    maxX = 259.0f;
+    minY = 84.0f;
+    maxY = 263.0f;
+  } else if (ui.currentPage == PAGE_TEMPERATURE) {
+    minX = 211.0f;
+    maxX = 458.0f;
+    minY = 85.0f;
+    maxY = 262.0f;
   } else if (ui.currentPage == PAGE_SOUND) {
-    minX = 20.0f;
+    minX = 16.0f;
     maxX = 459.0f;
-    minY = 150.0f;
+    minY = 170.0f;
     maxY = 269.0f;
+  } else if (ui.currentPage == PAGE_SOUND_FFT) {
+    minX = 17.0f;
+    maxX = 458.0f;
+    minY = 85.0f;
+    maxY = 262.0f;
   }
 
   ui.pointer.x = clampFloatJoystick(ui.pointer.x, minX, maxX);
@@ -144,7 +165,8 @@ void JoystickInput::update(UIState &ui) {
 
   bool currentState = btnPressed ? LOW : HIGH;
 
-  if (currentState != lastBtnState && (now - lastButtonChangeMs) > JOY_DEBOUNCE_MS) {
+  if (currentState != lastBtnState &&
+      (now - lastButtonChangeMs) > JOY_DEBOUNCE_MS) {
     lastButtonChangeMs = now;
     lastBtnState = currentState;
 
