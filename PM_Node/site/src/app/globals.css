@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: #f2f2f3;
+  --color-surface: #e9e9ea;
+  --color-ink: #1d1f20;
+  --color-ink-soft: #424244;
+  --color-muted: #5d5d60;
+
+  --color-accent: #5980a6;
+  --color-accent-100: #eef6ff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+
+  --color-deep: #1d2d3d;
+  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  --font-heading: var(--font-barlow-condensed);
+  --font-body: var(--font-barlow);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* PM Node sensing mark — pulse/breathe loop, from the brand sheet's spec. */
+.pmloop .ring { animation: pmloop-pulse 2.4s cubic-bezier(.4,0,.2,1) infinite; }
+.pmloop .r2 { animation-delay: .35s; }
+.pmloop .r3 { animation-delay: .7s; }
+.pmloop .core { animation: pmloop-breathe 2.4s cubic-bezier(.4,0,.2,1) infinite; transform-origin: 32px 32px; }
+@keyframes pmloop-pulse { 0%, 100% { stroke-opacity: 1; } 35% { stroke-opacity: .2; } }
+@keyframes pmloop-breathe { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.12); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pmloop .ring, .pmloop .core { animation: none; }
+}
