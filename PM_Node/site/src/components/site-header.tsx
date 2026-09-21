@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const LINKS = [
   { href: "/solution", label: "Solution" },
@@ -22,36 +23,57 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 bg-bg/90 backdrop-blur border-b border-divider">
       <div className="max-w-5xl mx-auto px-5 h-16 flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <Image src="/logo-full-color.svg" alt="PM Node" width={140} height={41} className="h-7 w-auto" priority />
+        <Link href="/" className="flex items-center" onClick={() => setOpen(false)}>
+          {/* Swapped in CSS, not JS — no hydration guess, no flash. */}
+          <Image
+            src="/logo-full-color.svg"
+            alt="PM Node"
+            width={140}
+            height={41}
+            className="h-7 w-auto dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo-full-dark.svg"
+            alt="PM Node"
+            width={140}
+            height={41}
+            className="h-7 w-auto hidden dark:block"
+            priority
+          />
         </Link>
 
-        <nav className="hidden md:flex items-center gap-7 font-mono text-[11px] tracking-[0.08em] uppercase text-muted">
-          {LINKS.map((l) => (
+        <div className="flex items-center gap-4">
+          <nav className="hidden md:flex items-center gap-7 font-mono text-[11px] tracking-[0.08em] uppercase text-muted">
+            {LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={pathname === l.href ? "text-accent-text" : "hover:text-ink"}
+              >
+                {l.label}
+              </Link>
+            ))}
             <Link
-              key={l.href}
-              href={l.href}
-              className={pathname === l.href ? "text-accent" : "hover:text-ink"}
+              href="/contact"
+              className="bg-accent text-on-accent px-3.5 py-2 hover:bg-accent-hover transition-colors"
             >
-              {l.label}
+              Contact
             </Link>
-          ))}
-          <Link
-            href="/contact"
-            className="bg-accent text-bg px-3.5 py-2 -my-2 hover:bg-accent-600"
-          >
-            Contact
-          </Link>
-        </nav>
+          </nav>
 
-        <button
-          type="button"
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="md:hidden text-ink"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
+          <ThemeToggle />
+
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            className="md:hidden text-ink"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -69,12 +91,16 @@ export function SiteHeader() {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className={pathname === l.href ? "text-accent" : ""}
+                  className={pathname === l.href ? "text-accent-text" : ""}
                 >
                   {l.label}
                 </Link>
               ))}
-              <Link href="/contact" onClick={() => setOpen(false)} className="text-accent">
+              <Link
+                href="/contact"
+                onClick={() => setOpen(false)}
+                className="text-accent-text"
+              >
                 Contact
               </Link>
             </div>

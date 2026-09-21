@@ -49,7 +49,7 @@ export default function StatusPage() {
         <DividerGrid className="grid-cols-1">
           {REVISIONS.map((r) => (
             <Cell key={r.rev} className="grid grid-cols-[90px_1fr] gap-4 items-baseline">
-              <span className="font-mono text-[10px] text-accent-700">{r.rev}</span>
+              <span className="font-mono text-[10px] text-accent-text">{r.rev}</span>
               <span>{r.note}</span>
             </Cell>
           ))}
@@ -61,7 +61,7 @@ export default function StatusPage() {
           <Reveal>
             <div className="grid sm:grid-cols-3 gap-8">
               <div>
-                <h3 className="font-heading text-[18px] mb-3 text-accent-700">Implemented</h3>
+                <h3 className="font-heading text-[18px] mb-3 text-accent-text">Implemented</h3>
                 <ul className="text-[13px] text-ink-soft space-y-2">
                   {IMPLEMENTED.map((i) => (
                     <li key={i} className="flex gap-2">
@@ -95,7 +95,7 @@ export default function StatusPage() {
         </div>
       </section>
 
-      <section className="bg-deep text-bg">
+      <section className="bg-feature text-feature-fg">
         <div className="max-w-5xl mx-auto px-5 py-14">
           <Reveal>
             <p className="font-heading text-[22px] max-w-[52ch]">

@@ -39,7 +39,7 @@ export default function UsePage() {
         ))}
       </div>
 
-      <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-700 mb-3">
+      <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-text mb-3">
         On the TFT
       </span>
       <DividerGrid className="grid-cols-2 sm:grid-cols-4">

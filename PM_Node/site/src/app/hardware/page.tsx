@@ -26,13 +26,13 @@ const STACK = [
 export default function HardwarePage() {
   return (
     <>
-      <Section eyebrow="The node" title="Six sensors, one board" kicker="Hardware" dark>
-        <DividerGrid dark className="sm:grid-cols-2 lg:grid-cols-3">
+      <Section eyebrow="The node" title="Six sensors, one board" kicker="Hardware" feature>
+        <DividerGrid feature className="sm:grid-cols-2 lg:grid-cols-3">
           {SPECS.map((s) => (
-            <Cell key={s.part} dark className="grid gap-1.5">
-              <span className="font-mono text-[10px] text-accent-300">{s.part}</span>
+            <Cell key={s.part} feature className="grid gap-1.5">
+              <span className="font-mono text-[10px] text-feature-accent">{s.part}</span>
               <span className="font-heading text-[22px]">{s.label}</span>
-              <span className="text-[13px] text-bg/70">{s.desc}</span>
+              <span className="text-[13px] text-feature-muted">{s.desc}</span>
             </Cell>
           ))}
         </DividerGrid>
@@ -41,7 +41,7 @@ export default function HardwarePage() {
       <section className="border-t border-divider">
         <div className="max-w-5xl mx-auto px-5 py-16">
           <Reveal>
-            <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-700 mb-4">
+            <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-text mb-4">
               Stack
             </span>
             <div className="flex flex-wrap gap-2">

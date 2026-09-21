@@ -37,7 +37,7 @@ export default function Home() {
     <>
       <section className="max-w-5xl mx-auto px-5 pt-16 pb-20 sm:pt-24 sm:pb-28 grid gap-12 lg:grid-cols-[1.2fr_1fr] items-center">
         <Reveal>
-          <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-accent-700">
+          <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-accent-text">
             PM Node
           </span>
           <h1 className="mt-3 text-[38px] sm:text-[52px] max-w-[18ch]">
@@ -76,12 +76,12 @@ export default function Home() {
                 <Link
                   key={href}
                   href={href}
-                  className="group bg-bg p-6 flex flex-col gap-3 hover:bg-accent-100/40 transition-colors"
+                  className="group bg-bg p-6 flex flex-col gap-3 hover:bg-accent-tint transition-colors"
                 >
                   <Icon size={22} strokeWidth={1.5} className="text-accent" />
                   <span className="font-heading text-[20px]">{title}</span>
                   <p className="text-[13px] text-muted flex-1">{body}</p>
-                  <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-accent-700 group-hover:gap-2 transition-all">
+                  <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-accent-text group-hover:gap-2 transition-all">
                     More <ArrowRight size={12} />
                   </span>
                 </Link>
@@ -91,7 +91,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-deep text-bg">
+      <section className="bg-feature text-feature-fg">
         <div className="max-w-5xl mx-auto px-5 py-16 flex flex-wrap items-center justify-between gap-6">
           <Reveal>
             <h2 className="text-[26px] max-w-[24ch]">

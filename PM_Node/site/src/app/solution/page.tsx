@@ -33,7 +33,7 @@ export default function SolutionPage() {
         <DividerGrid className="sm:grid-cols-3 lg:grid-cols-5">
           {PROBLEMS.map((label, i) => (
             <Cell key={label} className="grid gap-2">
-              <span className="font-mono text-[10px] text-accent-700">
+              <span className="font-mono text-[10px] text-accent-text">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span className="font-heading text-[19px]">{label}</span>
@@ -48,14 +48,14 @@ export default function SolutionPage() {
         </p>
       </Section>
 
-      <Section eyebrow="The solution" title="One node, one workflow" kicker="02" dark>
-        <p className="max-w-[64ch] text-bg/80 mb-8">
+      <Section eyebrow="The solution" title="One node, one workflow" kicker="02" feature>
+        <p className="max-w-[64ch] text-feature-muted mb-8">
           PM Node consolidates these inspection functions into one
           ESP32-S3-based embedded device:
         </p>
-        <DividerGrid dark className="sm:grid-cols-2">
+        <DividerGrid feature className="sm:grid-cols-2">
           {SOLUTION_POINTS.map((point) => (
-            <Cell key={point} dark className="text-[15px]">
+            <Cell key={point} feature className="text-[15px]">
               {point}
             </Cell>
           ))}

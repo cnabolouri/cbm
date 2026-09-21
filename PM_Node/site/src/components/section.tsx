@@ -5,17 +5,18 @@ export function Section({
   eyebrow,
   title,
   kicker,
-  dark = false,
+  feature = false,
   children,
 }: {
   eyebrow?: string;
   title: string;
   kicker?: string;
-  dark?: boolean;
+  /** Renders as an inverted band — a deliberate field, in either theme. */
+  feature?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className={dark ? "bg-deep text-bg" : "bg-bg text-ink"}>
+    <section className={feature ? "bg-feature text-feature-fg" : "bg-bg text-ink"}>
       <div className="max-w-5xl mx-auto px-5 py-16 sm:py-20">
         <Reveal>
           <div className="flex items-baseline justify-between gap-4 flex-wrap mb-8">
@@ -23,7 +24,7 @@ export function Section({
               {eyebrow && (
                 <span
                   className={`block font-mono text-[11px] tracking-[0.12em] uppercase mb-2 ${
-                    dark ? "text-accent-300" : "text-accent-700"
+                    feature ? "text-feature-accent" : "text-accent-text"
                   }`}
                 >
                   {eyebrow}
@@ -34,7 +35,7 @@ export function Section({
             {kicker && (
               <span
                 className={`font-mono text-[11px] ${
-                  dark ? "text-accent-300" : "text-muted"
+                  feature ? "text-feature-accent" : "text-muted"
                 }`}
               >
                 {kicker}

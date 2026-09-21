@@ -1,6 +1,8 @@
 export function AnimatedMark({
   size = 64,
-  color = "#5980a6",
+  // Follows the themed accent so the mark lifts on the dark ground instead of
+  // sitting at the light-mode steel, which goes muddy against #1d2d3d.
+  color = "var(--accent)",
   className = "",
 }: {
   size?: number;

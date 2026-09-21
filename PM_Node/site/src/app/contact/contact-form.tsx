@@ -17,8 +17,8 @@ export function ContactForm() {
 
   if (state.status === "success") {
     return (
-      <div className="border border-accent bg-accent-100/50 p-6 flex items-start gap-3">
-        <CheckCircle2 size={20} strokeWidth={1.5} className="text-accent-700 shrink-0 mt-0.5" />
+      <div className="border border-accent bg-accent-tint p-6 flex items-start gap-3">
+        <CheckCircle2 size={20} strokeWidth={1.5} className="text-accent-text shrink-0 mt-0.5" />
         <p className="text-ink">{state.message}</p>
       </div>
     );
@@ -67,7 +67,7 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex items-center justify-center gap-2 font-heading text-[17px] font-semibold tracking-[0.03em] px-6 py-3 border bg-accent text-bg border-accent hover:bg-accent-600 disabled:opacity-45 transition-colors"
+        className="inline-flex items-center justify-center gap-2 font-heading text-[17px] font-semibold tracking-[0.03em] px-6 py-3 border bg-accent text-on-accent border-accent hover:bg-accent-hover disabled:opacity-45 transition-colors"
       >
         {pending ? "Sending…" : "Send message"}
         {!pending && <Send size={16} strokeWidth={1.5} />}

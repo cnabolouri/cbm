@@ -1,21 +1,83 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic tokens. Components only ever reference these, so a theme swap is a
+   change of values here rather than a `dark:` variant on every element.
+   Values come from the brand palette: Paper #f2f2f3, Ink #1d1f20,
+   Deep field #1d2d3d, Signal steel #5980a6. */
+:root {
+  color-scheme: light;
+
+  --bg: #f2f2f3;
+  --surface: #e9e9ea;
+  --fg: #1d1f20;
+  --fg-soft: #424244;
+  --fg-muted: #5d5d60;
+  --divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  /* Steel as a fill, with Paper reading on top of it. */
+  --accent: #5980a6;
+  --accent-hover: #416180;
+  --on-accent: #f2f2f3;
+  /* Steel as text needs a deeper step to carry contrast on Paper. */
+  --accent-text: #416180;
+  --accent-tint: color-mix(in srgb, #5980a6 8%, transparent);
+
+  /* The deliberately inverted bands (hardware grid, closing CTA, status note). */
+  --feature: #1d2d3d;
+  --feature-fg: #f2f2f3;
+  --feature-muted: color-mix(in srgb, #f2f2f3 72%, transparent);
+  --feature-divider: color-mix(in srgb, #f2f2f3 20%, transparent);
+  --feature-accent: #b5d9fd;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --bg: #1d2d3d;
+  --surface: #24384a;
+  --fg: #f2f2f3;
+  --fg-soft: #c3d1db;
+  --fg-muted: #9fb2c2;
+  --divider: color-mix(in srgb, #f2f2f3 16%, transparent);
+
+  /* On the dark ground the steel lifts a step and the text on it inverts —
+     the design system's own rule for accents over a dark field. */
+  --accent: #94bce3;
+  --accent-hover: #b5d9fd;
+  --on-accent: #1d2d3d;
+  --accent-text: #94bce3;
+  --accent-tint: color-mix(in srgb, #94bce3 12%, transparent);
+
+  /* The feature band lifts above the page ground instead of dropping below it,
+     so those sections still read as a distinct field. */
+  --feature: #24384a;
+  --feature-fg: #f2f2f3;
+  --feature-muted: color-mix(in srgb, #f2f2f3 72%, transparent);
+  --feature-divider: color-mix(in srgb, #f2f2f3 18%, transparent);
+  --feature-accent: #b5d9fd;
+}
+
 @theme inline {
-  --color-bg: #f2f2f3;
-  --color-surface: #e9e9ea;
-  --color-ink: #1d1f20;
-  --color-ink-soft: #424244;
-  --color-muted: #5d5d60;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--fg);
+  --color-ink-soft: var(--fg-soft);
+  --color-muted: var(--fg-muted);
+  --color-divider: var(--divider);
 
-  --color-accent: #5980a6;
-  --color-accent-100: #eef6ff;
-  --color-accent-300: #b5d9fd;
-  --color-accent-600: #597ea3;
-  --color-accent-700: #416180;
-  --color-accent-800: #2c455d;
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-tint: var(--accent-tint);
 
-  --color-deep: #1d2d3d;
-  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+  --color-feature: var(--feature);
+  --color-feature-fg: var(--feature-fg);
+  --color-feature-muted: var(--feature-muted);
+  --color-feature-divider: var(--feature-divider);
+  --color-feature-accent: var(--feature-accent);
 
   --font-heading: var(--font-barlow-condensed);
   --font-body: var(--font-barlow);
@@ -27,8 +89,8 @@
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-ink);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-body), system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.6;
@@ -42,12 +104,12 @@ h1, h2, h3, h4 {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* PM Node sensing mark — pulse/breathe loop, from the brand sheet's spec. */

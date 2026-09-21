@@ -4,17 +4,18 @@ import type { ReactNode } from "react";
 export function DividerGrid({
   children,
   className = "",
-  dark = false,
+  feature = false,
 }: {
   children: ReactNode;
   className?: string;
-  dark?: boolean;
+  /** Sits inside an inverted feature band rather than on the page ground. */
+  feature?: boolean;
 }) {
   return (
     <div
       className={`grid gap-px border ${
-        dark
-          ? "bg-white/20 border-white/20"
+        feature
+          ? "bg-feature-divider border-feature-divider"
           : "bg-divider border-divider"
       } ${className}`}
     >
@@ -26,14 +27,14 @@ export function DividerGrid({
 export function Cell({
   children,
   className = "",
-  dark = false,
+  feature = false,
 }: {
   children: ReactNode;
   className?: string;
-  dark?: boolean;
+  feature?: boolean;
 }) {
   return (
-    <div className={`${dark ? "bg-deep" : "bg-bg"} p-5 ${className}`}>
+    <div className={`${feature ? "bg-feature" : "bg-bg"} p-5 ${className}`}>
       {children}
     </div>
   );

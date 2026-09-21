@@ -36,7 +36,7 @@ export default function AboutPage() {
           project is documented in detail, warts and all, on the{" "}
           <a
             href="https://github.com/cnabolouri/cbm/tree/main/PM_Node"
-            className="text-accent hover:text-accent-700 underline underline-offset-4"
+            className="text-accent hover:text-accent-text underline underline-offset-4"
           >
             GitHub repo
           </a>
@@ -44,7 +44,7 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-700 mb-5">
+      <span className="block font-mono text-[11px] tracking-[0.12em] uppercase text-accent-text mb-5">
         Two decisions along the way
       </span>
       <div className="grid sm:grid-cols-2 gap-6">

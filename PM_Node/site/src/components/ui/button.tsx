@@ -8,9 +8,9 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-accent text-bg border-accent hover:bg-accent-600 hover:border-accent-600",
+    "bg-accent text-on-accent border-accent hover:bg-accent-hover hover:border-accent-hover",
   secondary:
-    "bg-transparent text-ink-soft border-divider hover:bg-ink/5",
+    "bg-transparent text-ink-soft border-divider hover:bg-ink/5 hover:border-accent",
 };
 
 type BaseProps = {
