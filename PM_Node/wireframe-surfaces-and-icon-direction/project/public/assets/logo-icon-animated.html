@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+  PM Node — animated icon variants.
+
+  Delivered as HTML/CSS rather than standalone .svg: SMIL and <style> inside an
+  .svg are stripped by many CDNs and sanitisers, and CSS :hover never fires
+  inside an <img>. Copy the <style> block and the <svg> you want straight into
+  your page. Both inherit currentColor, so they work on light and dark grounds.
+  Resting state is the full-strength mark — if animation is disabled, the icon
+  is still a correct logo.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PM Node — animated icon</title>
+<style>
+  body { margin: 0; background: #f2f2f3; color: #1d1f20; font-family: Barlow, system-ui, sans-serif;
+         display: flex; gap: 48px; flex-wrap: wrap; padding: 48px; }
+
+  /* ---- shared ---- */
+  .pmnode-icon { color: #5980a6; }
+  .pmnode-icon .core { fill: #1d1f20; transform-origin: 32px 32px; }
+
+  /* ---- A. infinite sensing loop ---- */
+  .pmnode-loop .ring { animation: pmnode-pulse 2.4s cubic-bezier(.4,0,.2,1) infinite; }
+  .pmnode-loop .r2 { animation-delay: .35s; }
+  .pmnode-loop .r3 { animation-delay: .7s; }
+  .pmnode-loop .core { animation: pmnode-breathe 2.4s cubic-bezier(.4,0,.2,1) infinite; }
+  @keyframes pmnode-pulse { 0%, 100% { stroke-opacity: 1; } 35% { stroke-opacity: .2; } }
+  @keyframes pmnode-breathe { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.12); } }
+
+  /* ---- B. one-shot hover emit ---- */
+  .pmnode-hover .ring { transform-origin: 32px 32px; }
+  .pmnode-hover:hover .ring { animation: pmnode-emit 620ms cubic-bezier(.4,0,.2,1) 1 both; }
+  .pmnode-hover:hover .r2 { animation-delay: 90ms; }
+  .pmnode-hover:hover .r3 { animation-delay: 180ms; }
+  .pmnode-hover:hover .core { animation: pmnode-knock 620ms cubic-bezier(.4,0,.2,1) 1 both; }
+  @keyframes pmnode-emit { 0% { opacity: 0; transform: scale(.55); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes pmnode-knock { 0% { transform: scale(1); } 35% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pmnode-loop .ring, .pmnode-loop .core,
+    .pmnode-hover:hover .ring, .pmnode-hover:hover .core { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- A. infinite loop — live/recording indicator -->
+<svg class="pmnode-icon pmnode-loop" viewBox="0 0 64 64" width="120" height="120" role="img" aria-label="PM Node">
+  <g fill="none" stroke="currentColor" stroke-width="5">
+      <g class="ring r1"><path d="M26.26 23.81A10 10 0 0 0 26.26 40.19"/><path d="M37.74 23.81A10 10 0 0 1 37.74 40.19"/></g>
+      <g class="ring r2"><path d="M21.68 17.25A18 18 0 0 0 21.68 46.75"/><path d="M42.32 17.25A18 18 0 0 1 42.32 46.75"/></g>
+      <g class="ring r3"><path d="M17.09 10.70A26 26 0 0 0 17.09 53.30"/><path d="M46.91 10.70A26 26 0 0 1 46.91 53.30"/></g>
+  </g>
+  <circle class="core" cx="32" cy="32" r="5"/>
+</svg>
+
+<!-- B. one-shot on hover — nav mark, button -->
+<svg class="pmnode-icon pmnode-hover" viewBox="0 0 64 64" width="120" height="120" role="img" aria-label="PM Node">
+  <g fill="none" stroke="currentColor" stroke-width="5">
+      <g class="ring r1"><path d="M26.26 23.81A10 10 0 0 0 26.26 40.19"/><path d="M37.74 23.81A10 10 0 0 1 37.74 40.19"/></g>
+      <g class="ring r2"><path d="M21.68 17.25A18 18 0 0 0 21.68 46.75"/><path d="M42.32 17.25A18 18 0 0 1 42.32 46.75"/></g>
+      <g class="ring r3"><path d="M17.09 10.70A26 26 0 0 0 17.09 53.30"/><path d="M46.91 10.70A26 26 0 0 1 46.91 53.30"/></g>
+  </g>
+  <circle class="core" cx="32" cy="32" r="5"/>
+</svg>
+
+</body>
+</html>

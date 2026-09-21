@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  body { margin: 0; background: #f2f2f3; color: #1d1f20; font-family: Barlow, system-ui, sans-serif; }
+  a { color: #416180; }
+  a:hover { color: #2c455d; }
+</style>
+</helmet>
+
+<div style="max-width:1400px;margin:0 auto;padding:56px 32px 110px;font-size:15px;line-height:1.55">
+
+  <header style="display:grid;gap:18px;padding-bottom:26px;border-bottom:1px solid rgba(29,31,32,.16)">
+    <div style="display:flex;align-items:center;gap:14px">
+      <img src="public/assets/logo-icon-color.svg" alt="" style="width:36px;height:36px">
+      <span style="font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#5d5d60">Wireframes · rev 01 · structural fidelity</span>
+    </div>
+    <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:56px;line-height:1.02;letter-spacing:-.015em;margin:0">Local web UI &amp; project site</h1>
+    <p style="margin:0;max-width:70ch;color:#424244">Routes, field names and state enums are taken from the firmware — <code style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#e7e7ea;padding:1px 5px">web/web_ui.cpp</code> for the route table and <code style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#e7e7ea;padding:1px 5px">types.h</code> for the payloads. Device pages are drawn mobile-first at 360 px: an engineer on the floor joins the <code style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#e7e7ea;padding:1px 5px">PM-Node</code> AP from a phone.</p>
+  </header>
+
+  <sc-if value="{{ showRouteMap }}" hint-placeholder-val="{{ true }}">
+  <section style="margin-top:56px">
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 18px;color:#5d5d60">A — Information architecture</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Tab 1 — Monitor</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Overview</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/ → redirect</div>
+          <div>/overview</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">Landing state: is the node mounted, is it recording, is anything abnormal.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Tab 2 — Live</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Six modality pages</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/live</div>
+          <div>/live/vibration</div>
+          <div>/live/vibration_fft</div>
+          <div>/live/thermal</div>
+          <div>/live/temperature</div>
+          <div>/live/sound · /live/sound_fft</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">Each polls its own JSON endpoint. Waveform ↔ spectrum is a toggle inside the page, not a separate destination.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Tab 3 — Sessions</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Recorded runs</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/sessions</div>
+          <div>/edit_session · /save_session_meta</div>
+          <div>/compare</div>
+          <div>/view · /delete_session</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">A session is the unit of work — baseName + csv + wav + meta + summary.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Tab 4 — Files</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Raw SD card</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/files</div>
+          <div>/download · /delete</div>
+          <div>/api/file</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">Escape hatch below the session abstraction. Secondary by design.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Persistent</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Record control</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/record/start · /record/stop</div>
+          <div>REC_IDLE → REC_ARMED_WAITING_MOUNT → REC_ACTIVE</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">Reachable from every page. Mirrors the encoder press, so the two never disagree.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:18px 16px;display:grid;gap:9px;align-content:start">
+        <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Poll targets</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px">JSON endpoints</div>
+        <div style="display:grid;gap:5px;font:400 12px 'IBM Plex Mono',monospace;color:#424244">
+          <div>/api/status · /api/live</div>
+          <div>/api/vibration · /api/vibration_fft</div>
+          <div>/api/sound · /api/sound_fft</div>
+          <div>/api/thermal_frame · /api/analysis</div>
+        </div>
+        <p style="margin:6px 0 0;font-size:13px;color:#5d5d60">Thermal at 2 Hz to match MLX90640 refresh; everything else at 4 Hz.</p>
+      </div>
+
+    </div>
+  </section>
+  </sc-if>
+
+  <section style="margin-top:64px">
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px;color:#5d5d60">B — Local web UI · 360 px</h2>
+    <p style="margin:0 0 26px;max-width:70ch;color:#5d5d60;font-size:14px">Shared chrome on every page: a status bar carrying AP, SD and record state, and a four-item bottom tab bar sized for gloved thumbs (48 px).</p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:36px">
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Overview</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">GET /overview</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span>PM-Node · 192.168.4.1</span><span>SD ✓</span></div>
+          <div style="border:1px solid #5980a6;background:rgba(89,128,166,.1);padding:9px;display:grid;gap:3px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">mount.state</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:21px;line-height:1.1">MONITORING — analysis trusted</div>
+            <div style="font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">confidence 0.86 · stable 14 s · drift 0.004 g</div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:3px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">analysis.overallAlert</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;line-height:1">Normal</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:2px"><div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5d5d60">Vibration</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;line-height:1.05">0.18 <span style="font-size:13px;color:#5d5d60">in/s</span></div><div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">max 0.31 · axis X · Normal</div></div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:2px"><div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5d5d60">Δ Temp</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;line-height:1.05">+11.4 <span style="font-size:13px;color:#5d5d60">°F</span></div><div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">max +14.9 · Normal</div></div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:2px"><div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5d5d60">Sound</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;line-height:1.05">62 <span style="font-size:13px;color:#5d5d60">dB</span></div><div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">1 240 Hz · Normal</div></div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:2px"><div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5d5d60">Hotspot</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;line-height:1.05">138 <span style="font-size:13px;color:#5d5d60">°F</span></div><div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">range 71–138 °F</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:stretch">
+            <div style="background:#5980a6;color:#f2f2f3;display:flex;align-items:center;justify-content:center;height:48px;font-family:'Barlow Condensed',sans-serif;font-size:19px;letter-spacing:.04em">START RECORDING</div>
+            <div style="border:1px solid rgba(29,31,32,.16);display:flex;align-items:center;padding:0 11px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">REC_IDLE</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16);margin-top:2px">
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em">OVERVIEW</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#5d5d60">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Mount state sits above the readings, not beside them: an untrusted mount invalidates everything below it, so it has to be read first.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Live · Vibration</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/live/vibration</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span style="color:#416180">● REC 00:42</span><span>SD ✓</span></div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#5980a6;color:#f2f2f3;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace">WAVEFORM</div>
+            <div style="background:#fbfbfc;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">SPECTRUM →</div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:10px;display:grid;gap:2px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">total_in_s · velocity RMS</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:46px;line-height:1">0.184 <span style="font-size:17px;color:#5d5d60">in/s</span></div>
+            <div style="font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">max 0.311 · avg 0.152 · dominant X</div>
+          </div>
+          <div style="height:96px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Trend — 60 s rolling, 4 Hz</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">x_in_s</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:19px">.161</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">y_in_s</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:19px">.072</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">z_in_s</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:19px">.044</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">g rms</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:19px">.039</span></div>
+          </div>
+          <div style="border:1px dashed rgba(29,31,32,.4);padding:8px 9px;font:400 11px 'IBM Plex Mono',monospace;color:#424244">Empty state — <b style="font-weight:500">MOUNT_MOVING</b>: values dim to 45 %, trend pauses, banner reads “Hold the node still to resume analysis”.</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OVERVIEW</div>
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Axis breakdown is secondary to the single trendable number. Per-axis <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">ax_g/ay_g/az_g</code> stay collapsed behind the g-rms cell.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Live · Vibration FFT</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/live/vibration_fft</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span style="color:#416180">● REC 00:47</span><span>SD ✓</span></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#5980a6;color:#f2f2f3;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace">X</div>
+            <div style="background:#fbfbfc;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">Y</div>
+            <div style="background:#fbfbfc;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">Z</div>
+            <div style="background:#fbfbfc;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">MAG</div>
+          </div>
+          <div style="height:132px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Spectrum — 64 bins<br>tap a bar to pin its Hz</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:1px"><span style="font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#5d5d60">dominantHz</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;line-height:1.05">1 480</span></div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:1px"><span style="font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#5d5d60">character</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;line-height:1.05">Tonal</span></div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16)">
+            <div style="display:grid;grid-template-columns:28px 1fr 1fr;gap:1px;background:rgba(29,31,32,.12)">
+              <div style="background:#e9e9ea;padding:6px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">#</div>
+              <div style="background:#e9e9ea;padding:6px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">peaks[].hz</div>
+              <div style="background:#e9e9ea;padding:6px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">peaks[].mag</div>
+              <div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">1</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">1 480</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">0.91</div>
+              <div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">2</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">2 960</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">0.44</div>
+              <div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">3</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">4 440</div><div style="background:#fbfbfc;padding:6px;font:400 11px 'IBM Plex Mono',monospace">0.19</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="border:1px solid #5980a6;background:rgba(89,128,166,.12);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#2c455d">harmonic2 ✓</span>
+            <span style="border:1px solid #5980a6;background:rgba(89,128,166,.12);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#2c455d">harmonic3 ✓</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">low .12 / mid .68 / high .20</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OVERVIEW</div>
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Harmonic flags are the diagnostic payload — a 2× and 3× present against a 1 480 Hz fundamental is the shape an engineer is scanning for. They sit above the fold, the bands below.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Live · Thermal</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/live/thermal</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span>MLX90640 · 2 Hz</span><span>SD ✓</span></div>
+          <div style="position:relative;aspect-ratio:4/3;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">
+            <span>32 × 24 frame → 96 × 72</span>
+            <span style="position:absolute;top:26%;left:62%;width:26px;height:26px;border:1.5px solid #1d1f20;transform:translate(-50%,-50%)"></span>
+            <span style="position:absolute;top:26%;left:62%;transform:translate(14px,-22px);font:500 9px 'IBM Plex Mono',monospace;color:#1d1f20">HOT 138°</span>
+            <span style="position:absolute;top:58%;left:36%;width:1px;height:20px;background:rgba(29,31,32,.7);transform:translate(-50%,-50%)"></span>
+            <span style="position:absolute;top:58%;left:36%;width:20px;height:1px;background:rgba(29,31,32,.7);transform:translate(-50%,-50%)"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60"><span>71°</span><span style="flex:1;height:10px;background:linear-gradient(90deg,#1d2d3d,#5980a6,#b5d9fd,#f2f2f3);border:1px solid rgba(29,31,32,.16)"></span><span>138°</span></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">hotspotF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">138.2</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">pointerF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">94.6</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">ambientF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">72.1</span></div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16);display:grid;gap:7px;padding:9px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">Frame controls</div>
+            <div style="display:grid;grid-template-columns:62px 1fr;gap:7px;align-items:center">
+              <span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">palette</span>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)"><div style="background:#5980a6;color:#f2f2f3;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace">IRON</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">RAINBOW</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">GRAY</div></div>
+              <span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">range</span>
+              <div style="display:grid;grid-template-columns:1fr 1fr 58px 58px;gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)"><div style="background:#5980a6;color:#f2f2f3;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace">AUTO</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FIXED</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:400 10px 'IBM Plex Mono',monospace;color:#98989b">70</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:400 10px 'IBM Plex Mono',monospace;color:#98989b">140</div></div>
+              <span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">zoom</span>
+              <div style="height:26px;border:1px solid rgba(29,31,32,.16);display:flex;align-items:center;padding:0 7px"><span style="flex:1;height:1px;background:rgba(29,31,32,.3)"></span><span style="width:11px;height:11px;background:#5980a6;margin-left:-5px"></span><span style="flex:2;height:1px;background:rgba(29,31,32,.3)"></span><span style="margin-left:7px;font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">1.4×</span></div>
+              <span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">hotspot</span>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)"><div style="background:#5980a6;color:#f2f2f3;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace">AUTO</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">LOCKED</div></div>
+              <span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">threshold</span>
+              <div style="display:grid;grid-template-columns:1fr 1fr 58px;gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)"><div style="background:#fbfbfc;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OFF</div><div style="background:#5980a6;color:#f2f2f3;padding:6px;text-align:center;font:500 10px 'IBM Plex Mono',monospace">ABOVE</div><div style="background:#fbfbfc;padding:6px;text-align:center;font:400 10px 'IBM Plex Mono',monospace;color:#98989b">100</div></div>
+            </div>
+          </div>
+          <div style="border:1px solid #5980a6;background:rgba(89,128,166,.1);padding:8px 9px;font:400 10px 'IBM Plex Mono',monospace;color:#2c455d">thresholdRegion — 41 px · 5.3 % of frame · avg 112.4 °F · max 138.2 °F</div>
+          <div style="background:#5980a6;color:#f2f2f3;height:48px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:19px;letter-spacing:.04em">SAVE SNAPSHOT TO SD</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OVERVIEW</div>
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">The frame is the only element that gets a photographic treatment; everything under it stays wireframe. Tapping the frame sets the pointer (<code style="font-family:'IBM Plex Mono',monospace;font-size:12px">/set_thermal_pointer</code>) — no separate pointer control.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Live · Temperature</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/live/temperature</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span>DS18B20 probe</span><span>SD ✓</span></div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:10px;display:grid;gap:2px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">deltaF · objF − refF</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:46px;line-height:1">+11.4 <span style="font-size:17px;color:#5d5d60">°F</span></div>
+            <div style="font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">max +14.9 · avg +8.2 · risingFast false</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">refF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">86.8</span><span style="font:400 9px 'IBM Plex Mono',monospace;color:#98989b">83.1 / 91.0</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">objF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">98.2</span><span style="font:400 9px 'IBM Plex Mono',monospace;color:#98989b">from hotspot</span></div>
+            <div style="background:#fbfbfc;padding:8px 6px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">ambF</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">72.1</span><span style="font:400 9px 'IBM Plex Mono',monospace;color:#98989b">baseline</span></div>
+          </div>
+          <div style="height:120px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Trend — refF / objF / ambF<br>10 min window</div>
+          <div style="border:1px dashed rgba(29,31,32,.4);padding:8px 9px;font:400 11px 'IBM Plex Mono',monospace;color:#424244">Empty state — <b style="font-weight:500">valid = false</b>: “No probe detected on GPIO 7”, trend greys, delta hides.</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OVERVIEW</div>
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Delta leads, absolutes follow — an 11 °F rise over reference means something; 98 °F on its own does not.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;width:360px;flex:0 0 auto;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Live · Sound</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/live/sound · /sound_fft</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span>I2S · 16 kHz</span><span>SD ✓</span></div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#5980a6;color:#f2f2f3;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace">LEVEL</div>
+            <div style="background:#fbfbfc;height:38px;display:flex;align-items:center;justify-content:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">SPECTRUM →</div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:10px;display:grid;gap:6px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">dbRel</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:46px;line-height:1">62.4 <span style="font-size:17px;color:#5d5d60">dB</span></div>
+            <div style="height:14px;border:1px solid rgba(29,31,32,.16);display:flex"><span style="width:63%;background:#5980a6"></span></div>
+            <div style="font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">max 71.0 · avg 58.9 · peakHz 1 240</div>
+          </div>
+          <div style="height:120px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Spectrum — 64 bins of 256-pt FFT</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:1px"><span style="font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#5d5d60">centroidHz</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;line-height:1.05">1 902</span></div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:1px"><span style="font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#5d5d60">character</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;line-height:1.05">Broadband</span></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">low .31</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">mid .48</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">high .21</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 10px 'IBM Plex Mono',monospace;color:#98989b">harmonic2 —</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">OVERVIEW</div>
+            <div style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace">LIVE</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SESSIONS</div>
+            <div style="background:#fbfbfc;height:46px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FILES</div>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Level and spectrum share one route pair behind a toggle — same pattern as vibration, so the two modalities are learned once.</p>
+        </sc-if>
+      </figure>
+
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:36px;margin-top:44px">
+
+      <figure style="margin:0;display:grid;gap:10px;flex:1 1 560px;min-width:340px;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Sessions</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/sessions</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>◉ PM NODE</span><span>14 sessions · 218 MB used</span><span>SD ✓</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="background:#5980a6;color:#f2f2f3;padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace">ALL</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">ALERTS ONLY</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">BY TAG ▾</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">UNTAGGED</span>
+          </div>
+          <div style="display:grid;gap:6px">
+            <div style="border:1px solid #5980a6;padding:10px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">
+              <div style="display:grid;gap:3px;min-width:0">
+                <div style="font:500 12px 'IBM Plex Mono',monospace">PMN_0031_1042</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:19px;line-height:1.15">Pump 4 — outboard bearing</div>
+                <div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">2 m 14 s · 2 680 samples · 94 % trusted · CSV 1.9 MB · WAV 4.2 MB</div>
+                <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
+                  <span style="background:#5980a6;color:#f2f2f3;padding:3px 8px;font:500 9px 'IBM Plex Mono',monospace">VIB · WARN</span>
+                  <span style="border:1px solid rgba(29,31,32,.3);padding:3px 8px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">TEMP · NORMAL</span>
+                  <span style="border:1px solid rgba(29,31,32,.3);padding:3px 8px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">SOUND · NORMAL</span>
+                </div>
+              </div>
+              <div style="display:grid;gap:4px;justify-items:stretch">
+                <span style="border:1px solid rgba(29,31,32,.3);padding:6px 10px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60;text-align:center">VIEW</span>
+                <span style="border:1px solid rgba(29,31,32,.3);padding:6px 10px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60;text-align:center">EDIT</span>
+                <span style="border:1px solid rgba(29,31,32,.3);padding:6px 10px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60;text-align:center">COMPARE</span>
+              </div>
+            </div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:10px;display:grid;gap:3px">
+              <div style="font:500 12px 'IBM Plex Mono',monospace">PMN_0030_0915</div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:19px;line-height:1.15">Pump 4 — baseline after rebuild</div>
+              <div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">3 m 02 s · 99 % trusted · overallAlert Normal</div>
+            </div>
+            <div style="border:1px solid rgba(29,31,32,.16);padding:10px;display:grid;gap:3px">
+              <div style="font:500 12px 'IBM Plex Mono',monospace">PMN_0029_1607</div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:19px;line-height:1.15;color:#98989b">Untagged — add a name</div>
+              <div style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">0 m 41 s · 38 % trusted · <span style="color:#416180">low-confidence mount</span></div>
+            </div>
+          </div>
+          <div style="border:1px dashed rgba(29,31,32,.4);padding:8px 9px;font:400 11px 'IBM Plex Mono',monospace;color:#424244">Multi-select arms COMPARE and bulk DELETE. Compare is limited to two.</div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">The list is sorted by capture time, but <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">trustedRatio</code> is shown on every row — a 38 % run is a run you re-take, and hiding that costs a return trip to the machine.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;flex:1 1 400px;min-width:320px;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Session detail &amp; meta</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/edit_session</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="border:1px solid rgba(29,31,32,.16);padding:9px;display:grid;gap:2px">
+            <div style="font:500 12px 'IBM Plex Mono',monospace;color:#5d5d60">PMN_0031_1042</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:26px;line-height:1.1">Session summary</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#fbfbfc;padding:8px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">maxTotalVib</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">0.412 in/s</span></div>
+            <div style="background:#fbfbfc;padding:8px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">dominantAxis</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">X</span></div>
+            <div style="background:#fbfbfc;padding:8px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">maxDeltaTemp</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">+14.9 °F</span></div>
+            <div style="background:#fbfbfc;padding:8px;display:grid;gap:1px"><span style="font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">maxDb / maxHz</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">71.0 / 4 440</span></div>
+          </div>
+          <div style="border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+            <div style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">Metadata — POST /save_session_meta</div>
+            <label style="display:grid;gap:4px"><span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">tag</span><span style="height:38px;border:1px solid rgba(29,31,32,.3);display:flex;align-items:center;padding:0 9px;font:400 12px 'IBM Plex Mono',monospace">pump-4</span></label>
+            <label style="display:grid;gap:4px"><span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">status</span><span style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(29,31,32,.16);border:1px solid rgba(29,31,32,.16)"><span style="background:#fbfbfc;padding:9px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">BASELINE</span><span style="background:#5980a6;color:#f2f2f3;padding:9px;text-align:center;font:500 10px 'IBM Plex Mono',monospace">WATCH</span><span style="background:#fbfbfc;padding:9px;text-align:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">FAULT</span></span></label>
+            <label style="display:grid;gap:4px"><span style="font:400 10px 'IBM Plex Mono',monospace;color:#5d5d60">note</span><span style="height:70px;border:1px solid rgba(29,31,32,.3);display:block;padding:9px;font:400 12px 'IBM Plex Mono',monospace;color:#5d5d60">Rise in 2× since the 09-14 baseline. Recheck in 2 weeks.</span></label>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+              <span style="background:#5980a6;color:#f2f2f3;height:46px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:18px;letter-spacing:.04em">SAVE METADATA</span>
+              <span style="border:1px solid rgba(29,31,32,.3);height:46px;display:flex;align-items:center;padding:0 14px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">DELETE</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <span style="border:1px solid rgba(29,31,32,.3);height:44px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">DOWNLOAD CSV</span>
+            <span style="border:1px solid rgba(29,31,32,.3);height:44px;display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">DOWNLOAD WAV</span>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Tagging happens after the capture, on the walk back — so the form is the page, not a modal, and it saves without leaving.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;flex:1 1 460px;min-width:340px;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Compare</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/compare</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:grid;grid-template-columns:1fr 26px 1fr;gap:6px;align-items:center">
+            <span style="border:1px solid rgba(29,31,32,.3);height:42px;display:flex;align-items:center;padding:0 9px;font:400 11px 'IBM Plex Mono',monospace">PMN_0030 · baseline ▾</span>
+            <span style="text-align:center;font:500 11px 'IBM Plex Mono',monospace;color:#5d5d60">vs</span>
+            <span style="border:1px solid #5980a6;height:42px;display:flex;align-items:center;padding:0 9px;font:400 11px 'IBM Plex Mono',monospace">PMN_0031 · watch ▾</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">metric</div>
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">A</div>
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">B</div>
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">Δ</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">maxTotalVib</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">0.208</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">0.412</div><div style="background:rgba(89,128,166,.16);padding:7px;font:500 11px 'IBM Plex Mono',monospace;color:#2c455d">+98 %</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">avgTotalVib</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">0.121</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">0.187</div><div style="background:rgba(89,128,166,.16);padding:7px;font:500 11px 'IBM Plex Mono',monospace;color:#2c455d">+55 %</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">maxDeltaTemp</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">+9.8</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">+14.9</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">+5.1 °F</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">maxDb</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">68.2</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">71.0</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">+2.8 dB</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">dominantAxis</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">X</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">X</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#98989b">—</div>
+          </div>
+          <div style="height:110px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Overlaid spectra — A ghosted behind B</div>
+          <div style="border:1px solid #5980a6;background:rgba(89,128,166,.1);padding:10px;display:grid;gap:2px">
+            <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#416180">Read</span>
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:20px;line-height:1.2;color:#1d1f20">Vibration roughly doubled at the same dominant axis and frequency. Temperature and sound moved only slightly.</span>
+          </div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Comparison against a tagged baseline is the payoff of the whole recording workflow — it is a first-class route, not a feature buried in the list.</p>
+        </sc-if>
+      </figure>
+
+      <figure style="margin:0;display:grid;gap:10px;flex:1 1 400px;min-width:320px;align-content:start">
+        <figcaption style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid rgba(29,31,32,.3);padding-bottom:6px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px">Files</span>
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#416180">/files</span>
+        </figcaption>
+        <div style="background:#fbfbfc;border:1px solid rgba(29,31,32,.16);display:grid;gap:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(29,31,32,.16);padding:7px 9px;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.06em;color:#424244"><span>SD_MMC · /</span><span>218 MB / 32 GB</span></div>
+          <div style="display:grid;grid-template-columns:1.6fr .7fr auto;gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">name</div>
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">size</div>
+            <div style="background:#e9e9ea;padding:7px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">actions</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">PMN_0031_1042.csv</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">1.9 MB</div><div style="background:#fbfbfc;padding:7px;font:400 10px 'IBM Plex Mono',monospace;color:#416180">view · get · del</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">PMN_0031_1042.wav</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">4.2 MB</div><div style="background:#fbfbfc;padding:7px;font:400 10px 'IBM Plex Mono',monospace;color:#416180">view · get · del</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">PMN_0031_1042.json</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">2 KB</div><div style="background:#fbfbfc;padding:7px;font:400 10px 'IBM Plex Mono',monospace;color:#416180">view · get · del</div>
+            <div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace">THERM_0031_02.csv</div><div style="background:#fbfbfc;padding:7px;font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">48 KB</div><div style="background:#fbfbfc;padding:7px;font:400 10px 'IBM Plex Mono',monospace;color:#416180">view · get · del</div>
+          </div>
+          <div style="height:130px;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 5px,transparent 5px 10px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">/view — inline preview<br>first 200 rows, monospace</div>
+          <div style="border:1px dashed rgba(29,31,32,.4);padding:8px 9px;font:400 11px 'IBM Plex Mono',monospace;color:#424244">Destructive actions confirm inline on the row, not in a dialog — one-handed use.</div>
+        </div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0;font-size:13px;color:#5d5d60">Files is deliberately plain. Anyone who reaches for it already knows what a raw CSV is.</p>
+        </sc-if>
+      </figure>
+
+    </div>
+  </section>
+
+  <sc-if value="{{ showMarketing }}" hint-placeholder-val="{{ true }}">
+  <section style="margin-top:72px">
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px;color:#5d5d60">C — Project site · pm-node.sinabolouri.com</h2>
+    <p style="margin:0 0 26px;max-width:70ch;color:#5d5d60;font-size:14px">One scrolling page. Two readers: a reliability engineer deciding whether the approach is sound, and a reviewer deciding whether the work is good. The same sections serve both if the evidence is specific.</p>
+
+    <div style="border:1px solid rgba(29,31,32,.16);display:grid;gap:1px;background:rgba(29,31,32,.12)">
+
+      <div style="background:#f2f2f3;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px"><img src="public/assets/logo-full-color.svg" alt="PM Node" style="height:26px;width:auto"></div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5d5d60"><span>Problem</span><span>Solution</span><span>Hardware</span><span>Use</span><span>Status</span><span style="color:#f2f2f3;background:#5980a6;padding:6px 12px;margin:-6px 0">Source ↗</span></div>
+      </div>
+
+      <div style="background:#f2f2f3;padding:44px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;align-items:center">
+        <div style="display:grid;gap:14px">
+          <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#416180">H1 · one line, no tagline stacking</span>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:44px;line-height:1.02;letter-spacing:-.015em">Four inspection instruments in one handheld node.</div>
+          <div style="font-size:15px;color:#424244;max-width:46ch">Vibration, thermal, probe temperature and sound on one ESP32-S3 device, with an on-board TFT, a rotary interface, microSD recording and a local web UI over its own access point.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+            <span style="background:#5980a6;color:#f2f2f3;padding:11px 20px;font-family:'Barlow Condensed',sans-serif;font-size:17px;letter-spacing:.04em">VISIT PROJECT</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:11px 20px;font-family:'Barlow Condensed',sans-serif;font-size:17px;letter-spacing:.04em;color:#424244">READ THE SOURCE</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">IN PROGRESS</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">ESP32-S3</span>
+            <span style="border:1px solid rgba(29,31,32,.3);padding:4px 9px;font:500 9px 'IBM Plex Mono',monospace;color:#5d5d60">ARDUINO / C++</span>
+          </div>
+        </div>
+        <div style="aspect-ratio:4/3;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 6px,transparent 6px 12px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;text-align:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">Hero — device in hand against a machine<br>duotoned to the steel accent</div>
+      </div>
+
+      <div style="background:#f2f2f3;padding:40px 18px;display:grid;gap:22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap"><span style="font-family:'Barlow Condensed',sans-serif;font-size:30px">The problem</span><span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">Five tools, five walks to the machine</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+          <div style="background:#f2f2f3;padding:16px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">01</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Vibration checks</span></div>
+          <div style="background:#f2f2f3;padding:16px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">02</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Thermal hotspot detection</span></div>
+          <div style="background:#f2f2f3;padding:16px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">03</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Surface / reference temperature</span></div>
+          <div style="background:#f2f2f3;padding:16px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">04</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Sound-based anomaly inspection</span></div>
+          <div style="background:#f2f2f3;padding:16px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">05</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Local logging and review</span></div>
+        </div>
+        <p style="margin:0;max-width:64ch;color:#424244">More time is spent switching devices than analysing machine condition, and the captures never line up.</p>
+      </div>
+
+      <div style="background:#1d2d3d;color:#f2f2f3;padding:44px 18px;display:grid;gap:24px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap"><span style="font-family:'Barlow Condensed',sans-serif;font-size:30px">The node</span><span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#b5d9fd">Section divider — accent field, type reversed</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:1px;background:rgba(242,242,243,.2);border:1px solid rgba(242,242,243,.2)">
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">IIS3DWB</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Vibration + FFT</span><span style="font-size:13px;color:rgba(242,242,243,.72)">Per-axis velocity, dominant frequency, harmonic detection.</span></div>
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">MLX90640</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Thermal camera</span><span style="font-size:13px;color:rgba(242,242,243,.72)">32 × 24 at 2 Hz with hotspot tracking and threshold regions.</span></div>
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">DS18B20</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Probe temperature</span><span style="font-size:13px;color:rgba(242,242,243,.72)">Contact reference the thermal delta is measured against.</span></div>
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">I2S MIC</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Sound + spectrum</span><span style="font-size:13px;color:rgba(242,242,243,.72)">16 kHz level and 256-point FFT with a character classification.</span></div>
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">ST7796 + KY-040</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">On-device UI</span><span style="font-size:13px;color:rgba(242,242,243,.72)">480 × 320 TFT, eight pages, one rotary encoder.</span></div>
+          <div style="background:#1d2d3d;padding:18px;display:grid;gap:5px"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#b5d9fd">microSD + AP</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:22px">Record &amp; serve</span><span style="font-size:13px;color:rgba(242,242,243,.72)">CSV at 20 Hz, WAV audio, and a web UI over its own access point.</span></div>
+        </div>
+      </div>
+
+      <div style="background:#f2f2f3;padding:40px 18px;display:grid;gap:24px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap"><span style="font-family:'Barlow Condensed',sans-serif;font-size:30px">One control</span><span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">The joystick came out; a rotary went in</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px">
+          <div style="border:1px solid rgba(29,31,32,.16);padding:18px;display:grid;gap:8px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:34px;line-height:1">↻</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">Rotate clockwise</span><span style="font-size:13px;color:#424244">Next page.</span></div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:18px;display:grid;gap:8px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:34px;line-height:1">↺</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">Rotate counter-clockwise</span><span style="font-size:13px;color:#424244">Previous page.</span></div>
+          <div style="border:1px solid rgba(29,31,32,.16);padding:18px;display:grid;gap:8px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:34px;line-height:1">◉</span><span style="font-family:'Barlow Condensed',sans-serif;font-size:21px">Press</span><span style="font-size:13px;color:#424244">Start or stop recording.</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">HOME</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">VIBRATION</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">VIBRATION FFT</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">THERMAL</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">TEMPERATURE</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SOUND</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SOUND FFT</div>
+          <div style="background:#f2f2f3;padding:12px;font:500 10px 'IBM Plex Mono',monospace;color:#5d5d60">SYSTEM</div>
+        </div>
+        <div style="aspect-ratio:3/1;background:repeating-linear-gradient(45deg,rgba(89,128,166,.13) 0 6px,transparent 6px 12px);border:1px solid rgba(89,128,166,.35);display:flex;align-items:center;justify-content:center;font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#416180">TFT page strip — three screens photographed straight on</div>
+      </div>
+
+      <div style="background:#f2f2f3;padding:40px 18px;display:grid;gap:22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap"><span style="font-family:'Barlow Condensed',sans-serif;font-size:30px">Where it stands</span><span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">Hardware revisions, in order</span></div>
+        <div style="display:grid;gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+          <div style="background:#f2f2f3;padding:13px 16px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">REV 01</span><span style="font-size:14px">Display replaced — moved to the ST7796.</span></div>
+          <div style="background:#f2f2f3;padding:13px 16px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">REV 02</span><span style="font-size:14px">Joystick removed; pointer-driven navigation dropped.</span></div>
+          <div style="background:#f2f2f3;padding:13px 16px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">REV 03</span><span style="font-size:14px">KY-040 rotary encoder adopted as the single control.</span></div>
+          <div style="background:#f2f2f3;padding:13px 16px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">REV 04</span><span style="font-size:14px">Vibration sensor replaced with the IIS3DWB.</span></div>
+          <div style="background:#f2f2f3;padding:13px 16px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:baseline"><span style="font:500 10px 'IBM Plex Mono',monospace;color:#416180">REV 05</span><span style="font-size:14px">SPI bus conflicts resolved between the display, sensor and SD.</span></div>
+        </div>
+        <p style="margin:0;max-width:64ch;color:#424244">Core sensing, TFT navigation, local web serving, recording toggles and the analysis pages are implemented or partially implemented. Active development.</p>
+      </div>
+
+      <div style="background:#f2f2f3;padding:32px 18px;display:grid;gap:16px">
+        <span style="font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5d5d60">Stack</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">ESP32-S3</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">Arduino / C++</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">Arduino_GFX_Library</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">ST7796 TFT</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">KY-040</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">IIS3DWB</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">MLX90640</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">DS18B20</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">I2S microphone</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">microSD</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">Wi-Fi AP</span>
+          <span style="border:1px solid rgba(29,31,32,.3);padding:6px 11px;font:500 10px 'IBM Plex Mono',monospace;color:#424244">Local web UI</span>
+        </div>
+      </div>
+
+      <div style="background:#f2f2f3;padding:26px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+        <img src="public/assets/logo-icon-light.svg" alt="PM Node" style="width:26px;height:26px">
+        <span style="font:400 11px 'IBM Plex Mono',monospace;color:#5d5d60">Footer — repo link, contact, last-updated date</span>
+      </div>
+
+    </div>
+  </section>
+  </sc-if>
+
+  <section style="margin-top:72px">
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 18px;color:#5d5d60">D — Rules the build should hold</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:rgba(29,31,32,.12);border:1px solid rgba(29,31,32,.16)">
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Trust before value</span><span style="font-size:13px;color:#424244">Any page showing analysis output states its mount state first. An untrusted reading is shown dimmed with the reason, never hidden and never presented as fact.</span></div>
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">One record state</span><span style="font-size:13px;color:#424244">Encoder press and web button drive the same <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">RecordingMode</code>. The web UI polls <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">/api/status</code> so it never shows a stale state after a press on the device.</span></div>
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Thumb-sized targets</span><span style="font-size:13px;color:#424244">46–48 px minimum on every control. The user is standing, one-handed, possibly gloved.</span></div>
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">No frameworks on device</span><span style="font-size:13px;color:#424244">Pages are served as strings from <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">web_ui.cpp</code>. Layout is CSS grid, charts are inline SVG or canvas, polling is <code style="font-family:'IBM Plex Mono',monospace;font-size:12px">fetch</code> — nothing that needs a CDN the AP cannot reach.</span></div>
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Dark theme on device</span><span style="font-size:13px;color:#424244">The web UI should ship the dark ground (#1D2D3D) to match the TFT and survive daylight glare. These wireframes are drawn light for print and review.</span></div>
+      <div style="background:#f2f2f3;padding:18px;display:grid;gap:6px"><span style="font-family:'Barlow Condensed',sans-serif;font-size:20px">Units on every number</span><span style="font-size:13px;color:#424244">in/s, g, °F, dB, Hz. The firmware mixes them freely; the UI never does.</span></div>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sheet&quot;},&quot;showRouteMap&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sheet&quot;},&quot;showMarketing&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sheet&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showAnnotations: this.props.showAnnotations ?? true,
+      showRouteMap: this.props.showRouteMap ?? true,
+      showMarketing: this.props.showMarketing ?? true
+    };
+  }
+}
+</script>
+</body>
+</html>

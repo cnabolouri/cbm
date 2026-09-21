@@ -464,15 +464,15 @@ String SDManager::listSessionsCardsHtml() {
     encCsv.replace(" ", "%20");
     encWav.replace(" ", "%20");
 
-    String overallColor = "#238636";
-    if (sessions[i].summary.overallAlert == "High") overallColor = "#b42318";
-    else if (sessions[i].summary.overallAlert == "Watch") overallColor = "#9a6700";
+    String overallColor = "#5fd38d";
+    if (sessions[i].summary.overallAlert == "High") overallColor = "#ff6b6b";
+    else if (sessions[i].summary.overallAlert == "Watch") overallColor = "#f0b429";
 
     s += "<div class='card'>";
     s += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;'>";
     s += "<h2 style='margin-top:0;margin-bottom:8px;'>" + htmlEscape(base) + "</h2>";
     if (sessions[i].summary.valid) {
-      s += "<span style='background:" + overallColor + ";color:#fff;padding:4px 8px;border-radius:999px;font-size:12px;'>" + sessions[i].summary.overallAlert + "</span>";
+      s += "<span style='background:" + overallColor + ";color:#1d2d3d;padding:4px 8px;border-radius:999px;font-size:12px;'>" + sessions[i].summary.overallAlert + "</span>";
     }
     s += "</div>";
 
@@ -500,7 +500,7 @@ String SDManager::listSessionsCardsHtml() {
     }
 
     if (sessions[i].summary.valid) {
-      s += "<hr style='border-color:#333;margin:12px 0;'>";
+      s += "<hr style='border-color:#33495c;margin:12px 0;'>";
       s += "<div class='muted'><b>Vib max:</b> " + String(sessions[i].summary.maxTotalVib, 5) + " in/s</div>";
       s += "<div class='muted'><b>Vib avg:</b> " + String(sessions[i].summary.avgTotalVib, 5) + " in/s</div>";
       s += "<div class='muted'><b>Axis:</b> " + sessions[i].summary.dominantAxis + " | <b>Alert:</b> " + sessions[i].summary.vibrationAlert + "</div>";
@@ -523,7 +523,7 @@ String SDManager::listSessionsCardsHtml() {
       s += "<a class='btn' href='/download?name=" + encWav + "'>WAV</a>";
     }
 
-    s += "<a class='btn' style='background:#b42318;' href='/delete_session?base=" + encBase + "' onclick=\"return confirm('Delete session?');\">Delete</a>";
+    s += "<a class='btn' style='background:#ff6b6b;' href='/delete_session?base=" + encBase + "' onclick=\"return confirm('Delete session?');\">Delete</a>";
     s += "</div></div>";
   }
 
